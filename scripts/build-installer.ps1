@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Compiler, [string]$Version='0.3.1', [ValidateSet('x64','arm64')][string]$Architecture='x64')
+param([string]$Compiler, [string]$Version='0.3.2', [ValidateSet('x64','arm64')][string]$Architecture='x64')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
 if(!$Compiler){$Compiler=Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 7/ISCC.exe'}

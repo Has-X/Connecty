@@ -38,10 +38,16 @@ override them if owned. Changed-key testing needs a second existing public
 Ed25519 known_hosts entry. User profiles and known_hosts are never modified.
 
 Checks: simultaneous forwarding directions, verified Windows SSH banner through
-the reverse route, agent-only operation, forced TCP loss and independent recovery,
+the reverse route, agent-only operation, repeated client TCP resets without an
+SSH reconnect, forced TCP loss and independent recovery,
 injected power recovery, unknown/changed host keys, silent blackholing, listener
 cleanup and acknowledged shutdown. Results stay in the ignored build directory.
 Expected forced relay resets are not application failures.
+
+`stream_reset` records an individual forwarded connection reset, with the peer,
+destination and original OS error. It does not change tunnel state. Other transfer
+errors remain warnings. Unit tests also check that recovery and cancellation can
+interrupt a pending channel-open operation before its timeout expires.
 
 Power-event injection requires `--test-mode`; normal agents reject it. It tests
 dispatch and cleanup, **not physical Windows sleep**.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Connecty VERSION 0.3.1 LANGUAGES CXX RC)
+project(Connecty VERSION 0.3.2 LANGUAGES CXX RC)
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Connecty requires Windows and the MSVC C++ toolchain.")
 endif()

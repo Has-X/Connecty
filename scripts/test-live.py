@@ -10,6 +10,7 @@ import os
 import pathlib
 import shutil
 import socket
+import struct
 import subprocess
 import time
 
@@ -147,6 +148,23 @@ async def main(args):
         assert await asyncio.wait_for(duplicate.wait(), 8) == 0
         assert (await ctl("snapshot"))["agentPid"] == agent.pid
         passed("duplicate launch attaches safely without replacing the agent")
+        # Abort real local-forward clients after reading the remote banner. These
+        # must close only their own channels, with no SSH transport reconnection.
+        prior = await ctl("snapshot")
+        def reset_client():
+            with socket.create_connection(("127.0.0.1", args.local_port), timeout=8) as stream:
+                assert stream.recv(256).startswith(b"SSH-2.0-")
+                stream.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("HH", 1, 0))
+        for _ in range(10):
+            await asyncio.to_thread(reset_client)
+        await wait(lambda s: sum(entry["code"] == "stream_reset"
+                                for entry in s["connections"]["local"]["logs"]) >= 10)
+        await healthy(); await banner()
+        after = await ctl("snapshot")
+        assert after["agentPid"] == prior["agentPid"]
+        assert all(after["connections"][key]["retries"] == prior["connections"][key]["retries"]
+                   for key in ("reverse", "local"))
+        passed("repeated TCP resets are isolated; same agent and SSH sessions remain healthy")
         before = relay.accepted
         relay.disconnect()
         await wait(lambda s: any(c["retries"] for c in s["connections"].values()))

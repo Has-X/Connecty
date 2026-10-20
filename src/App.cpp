@@ -796,7 +796,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
  <ToggleSwitch x:Name="SaveLogs" Header="Save connection history"/>
  <TextBox x:Name="LogFolder" Header="Log folder"/>
  <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><NumberBox x:Name="LogDays" Header="Keep for (days)" Minimum="1" Maximum="30" SpinButtonPlacementMode="Compact"/><NumberBox x:Name="LogSize" Grid.Column="1" Header="File limit (MiB)" Minimum="1" Maximum="16" SpinButtonPlacementMode="Compact"/></Grid>
- <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="36" Height="36"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="Connecty 0.3.1" FontSize="13" FontWeight="SemiBold"/><TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"><Run Text="By "/><Hyperlink NavigateUri="https://chromatic.hu">Chromatic</Hyperlink></TextBlock></StackPanel></StackPanel>
+ <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="36" Height="36"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="Connecty 0.3.2" FontSize="13" FontWeight="SemiBold"/><TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"><Run Text="By "/><Hyperlink NavigateUri="https://chromatic.hu">Chromatic</Hyperlink></TextBlock></StackPanel></StackPanel>
 </StackPanel></ScrollViewer>)xaml").as<ScrollViewer>();
             Logo(panel.FindName(L"SettingsLogo").as<Image>());
             auto startup = panel.FindName(L"Startup").as<ToggleSwitch>(); startup.IsOn(StartupEnabled());

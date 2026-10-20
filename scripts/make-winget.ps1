@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version='0.3.1', [ValidateSet('x64','arm64')][string[]]$Architectures=@('x64','arm64'))
+param([string]$Version='0.3.2', [ValidateSet('x64','arm64')][string[]]$Architectures=@('x64','arm64'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
 $manifest=Join-Path $root "packaging/winget/manifests/c/Chromatic/Connecty/$Version"

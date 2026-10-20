@@ -50,6 +50,6 @@ the installed application itself does not. Runtime downloads and hashes are
 pinned separately for each architecture. Source builds can cross-compile without
 `-Test` when the corresponding MSVC target tools are installed.
 
-Connecty 0.3.1 is AGPL-3.0-or-later. LICENSE, NOTICE and third-party notices are
+Connecty 0.3.2 is AGPL-3.0-or-later. LICENSE, NOTICE and third-party notices are
 included in both installers and portable packages. Earlier published versions
 retain their original license.

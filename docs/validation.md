@@ -1,4 +1,19 @@
-# Validation record — 0.3.1
+# Validation record — 0.3.2
+
+Verified locally on 2026-10-20:
+
+- Twenty Rust tests, the C++ core check, formatting and Clippy passed.
+- Eleven isolated live checks passed, including ten deliberately reset client
+  connections without an SSH reconnect, forced TCP loss, silent blackholing,
+  injected suspend/resume, host-key rejection and listener cleanup.
+- Regression coverage verifies that cancellation and recovery interrupt pending
+  channel-open waits immediately. TCP resets retain their original error and
+  endpoint details as informational stream events; other transfer errors remain
+  warnings and neither stream outcome changes the tunnel state.
+- The installed updated agent reached FOXE through both Prey and Brute, with
+  zero transport retries after startup. Physical sleep was not repeated.
+
+## Previous release — 0.3.1
 
 Verified locally on 2026-10-20:
 

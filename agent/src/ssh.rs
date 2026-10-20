@@ -151,6 +151,48 @@ impl client::Handler for Handler {
 fn network(e: impl std::fmt::Display) -> AgentError {
     AgentError::network(e.to_string())
 }
+// Race the entire operation, including nested channel-open waits, against recovery.
+// Dropping work first releases its borrowed handle before session cleanup runs.
+async fn interruptible<T>(
+    cancel: &CancellationToken,
+    recovery: &mut watch::Receiver<Recovery>,
+    work: impl std::future::Future<Output = Result<T, AgentError>>,
+) -> Result<Option<T>, AgentError> {
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => Ok(None),
+        _ = recovery.changed() => Err(network("Network or power state changed")),
+        result = work => result.map(Some),
+    }
+}
+
+fn log_stream_result(
+    publisher: &Publisher,
+    origin: &str,
+    target: &str,
+    port: u16,
+    result: io::Result<(u64, u64)>,
+) {
+    match result {
+        Ok((received, sent)) => publisher.log(
+            "info",
+            "stream_closed",
+            &format!("{origin} disconnected; {received} bytes received, {sent} sent"),
+        ),
+        // A reset terminates this stream, not the persistent SSH transport. Keep
+        // the cause visible without presenting a client disconnect as tunnel failure.
+        Err(e) if e.kind() == io::ErrorKind::ConnectionReset => publisher.log(
+            "info",
+            "stream_reset",
+            &format!("Forwarded connection reset ({origin} to {target}:{port}): {e}"),
+        ),
+        Err(e) => publisher.log(
+            "warn",
+            "stream_error",
+            &format!("Forwarded connection failed ({origin} to {target}:{port}): {e}"),
+        ),
+    }
+}
 pub fn backoff(attempt: u32, random: f64) -> Duration {
     let base = (1u64 << attempt.min(6)).min(60) as f64;
     Duration::from_secs_f64((base * (0.75 + random.clamp(0.0, 1.0) * 0.5)).min(75.0))
@@ -331,11 +373,10 @@ async fn session(
     let mut verify = tokio::time::interval(Duration::from_secs(60));
     verify.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut failures = 0;
-    let result = loop {
+    let result = interruptible::<()>(cancel, recovery, async {
+      loop {
         tokio::select! {
             biased;
-            _ = cancel.cancelled() => break Ok(()),
-            _ = recovery.changed() => break Err(network("Network or power state changed")),
             result = &mut handle => break Err(match result {
                 Ok(()) => network("SSH connection closed"),
                 Err(e) => e.agent(),
@@ -353,10 +394,7 @@ async fn session(
                             log.log("info", "stream_open", &format!("{} connected to {target}:{port} (reverse)", request.origin));
                             let mut channel = request.channel.into_stream();
                             let result = io::copy_bidirectional(&mut channel, &mut socket).await;
-                            match result {
-                                Ok((received, sent)) => log.log("info", "stream_closed", &format!("{} disconnected; {received} bytes received, {sent} sent", request.origin)),
-                                Err(e) => log.log("warn", "stream_error", &format!("{}: {e}", request.origin)),
-                            }
+                            log_stream_result(&log, &request.origin, &target, port, result);
                         }
                         _ => {
                             log.log("warn", "stream_rejected", &format!("{} could not reach {target}:{port}", request.origin));
@@ -369,12 +407,9 @@ async fn session(
                 match &listener { Some(l) => l.accept().await, None => std::future::pending().await }
             }, if listener.is_some() && streams.len() < MAX_STREAMS => {
                 let (mut socket, origin) = accepted.map_err(network)?;
-                let opened = tokio::select! {
-                    _ = cancel.cancelled() => break Ok(()),
-                    result = timeout(Duration::from_secs(10), handle.channel_open_direct_tcpip(
+                let opened = timeout(Duration::from_secs(10), handle.channel_open_direct_tcpip(
                         &p.target, u32::from(p.target_port), origin.ip().to_string(), u32::from(origin.port())
-                    )) => result,
-                };
+                    )).await;
                 let channel = match opened {
                     Ok(Ok(channel)) => channel,
                     _ => {
@@ -384,19 +419,16 @@ async fn session(
                 };
                 publisher.log("info", "stream_open", &format!("{origin} connected to {}:{} (local)", p.target, p.target_port));
                 let log = publisher.clone();
+                let target = p.target.clone();
+                let port = p.target_port;
                 streams.spawn(async move {
                     let mut channel = channel.into_stream();
-                    match io::copy_bidirectional(&mut channel, &mut socket).await {
-                        Ok((received, sent)) => log.log("info", "stream_closed", &format!("{origin} disconnected; {received} bytes received, {sent} sent")),
-                        Err(e) => log.log("warn", "stream_error", &format!("{origin}: {e}")),
-                    }
+                    let result = io::copy_bidirectional(&mut channel, &mut socket).await;
+                    log_stream_result(&log, &origin.to_string(), &target, port, result);
                 });
             },
             _ = verify.tick(), if !p.probe.is_empty() && verification.is_empty() => {
-                let opened = tokio::select! {
-                    _ = cancel.cancelled() => break Ok(()),
-                    result = timeout(Duration::from_secs(5), handle.channel_open_session()) => result,
-                };
+                let opened = timeout(Duration::from_secs(5), handle.channel_open_session()).await;
                 let command = p.probe.clone();
                 verification.spawn(async move {
                     match opened {
@@ -422,7 +454,8 @@ async fn session(
                 }
             }
         }
-    };
+      }
+    }).await.map(|_| ());
     // Cancellation owns every forwarded socket; no foreign session is killed.
     streams.abort_all();
     while streams.join_next().await.is_some() {}
@@ -557,6 +590,79 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stream_reset_is_distinct_from_transfer_failure_and_keeps_tunnel_state() {
+        let mut snapshot = crate::model::Snapshot::default();
+        let mut connection = crate::model::ConnectionState::default();
+        connection.set("verified", "Return path checked", None);
+        snapshot.connections.insert("test".into(), connection);
+        let store = crate::state::Store::new(snapshot);
+        let publisher = Publisher {
+            store: store.clone(),
+            id: "test".into(),
+            generation: 0,
+        };
+        log_stream_result(
+            &publisher,
+            "127.0.0.1:1234",
+            "127.0.0.1",
+            22,
+            Err(io::Error::from_raw_os_error(10054)),
+        );
+        log_stream_result(
+            &publisher,
+            "127.0.0.1:1234",
+            "127.0.0.1",
+            22,
+            Err(io::Error::new(io::ErrorKind::TimedOut, "transfer stalled")),
+        );
+        let snapshot = store.read();
+        let state = &snapshot.connections["test"];
+        assert_eq!(state.state, "verified");
+        assert_eq!(state.retries, 0);
+        assert_eq!(state.logs[0].code, "stream_reset");
+        assert_eq!(state.logs[0].level, "info");
+        assert!(state.logs[0].message.contains("10054"));
+        assert!(state.logs[0].message.contains("127.0.0.1:22"));
+        assert_eq!(state.logs[1].code, "stream_error");
+        assert_eq!(state.logs[1].level, "warn");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn recovery_interrupts_nested_channel_wait_without_its_timeout() {
+        for cancel_work in [false, true] {
+            let cancel = CancellationToken::new();
+            let signal = cancel.clone();
+            let (events, mut recovery) = watch::channel(Recovery::Ready);
+            let (entered, started) = tokio::sync::oneshot::channel();
+            let (released, dropped) = tokio::sync::oneshot::channel::<()>();
+            let task = tokio::spawn(async move {
+                interruptible(&cancel, &mut recovery, async {
+                    // The guard proves cancellation drops in-flight work before cleanup.
+                    let _guard = released;
+                    entered.send(()).unwrap();
+                    std::future::pending::<Result<(), AgentError>>().await
+                })
+                .await
+            });
+            started.await.unwrap();
+            let before = Instant::now();
+            if cancel_work {
+                signal.cancel();
+            } else {
+                events.send(Recovery::Suspend).unwrap();
+            }
+            let result = task.await.unwrap();
+            assert_eq!(Instant::now(), before);
+            assert!(dropped.await.is_err());
+            if cancel_work {
+                assert!(matches!(result, Ok(None)));
+            } else {
+                assert!(result.unwrap_err().retryable);
+            }
+        }
+    }
+
     #[test]
     fn jitter_bounded() {
         for n in 0..100 {
