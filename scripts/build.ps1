@@ -61,7 +61,7 @@ $ninja=Join-Path $vs 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja'
 $env:PATH="$ninja;$env:PATH"
 $build=Join-Path $root $(if($Architecture -eq 'x64'){'build/native'}else{'build/native-arm64'})
 # Refresh only workspace package metadata after a version edit; dependencies stay locked.
-& cargo update --manifest-path "$root/agent/Cargo.toml" --workspace --offline
+& cargo update --manifest-path "$root/agent/Cargo.toml" --workspace
 if($LASTEXITCODE){throw 'Cargo lockfile version synchronization failed'}
 & cargo build --manifest-path "$root/agent/Cargo.toml" --release --locked --target $triple
 if($LASTEXITCODE){throw 'Rust agent build failed'}
