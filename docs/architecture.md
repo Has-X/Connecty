@@ -131,3 +131,10 @@ The UI requests history/settings off its main thread. Recent snapshots retain
 only 32 records per connection. On graceful shutdown the journal drains queued
 records with a bounded deadline. This is a local troubleshooting history, not
 a tamper-proof authentication audit.
+
+Tray light dismissal uses a temporary low-level mouse hook only while the panel
+is visible, alongside activation and Escape handling. It posts a dismissal
+message for outside button clicks, passes every input event through, and records
+no input. Hiding or closing the panel removes the hook. No global input hook
+runs in the background agent. Native --ui-check validates startup XAML without
+starting the agent or opening a window.

@@ -23,6 +23,9 @@ jobs:
       - name: Build, test, and package
         shell: pwsh
         run: ./scripts/build.ps1 -Test -Package -Architecture ${{ matrix.arch }}
+      - name: Native XAML startup
+        shell: pwsh
+        run: ./scripts/test-ui.ps1 -Architecture ${{ matrix.arch }}
       - name: Rust lint
         run: cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust formatting

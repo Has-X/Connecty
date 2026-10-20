@@ -18,6 +18,8 @@ using namespace Microsoft::UI::Xaml::Media;
 using namespace connecty;
 namespace
 {
+int uiCheckResult = 1;
+bool UiCheck() { return wcsstr(GetCommandLineW(), L"--ui-check") != nullptr; }
 // Reserve the modal slot before asynchronous preparation as well as ShowAsync.
 struct DialogScope
 {
@@ -45,7 +47,7 @@ Brush StateBrush(State s)
 hstring StateGlyph(State s)
 {
     if (s == State::Verified)
-        return L"\xE73E";
+        return L"\xE774";
     if (s == State::Forwarding)
         return L"\xE774";
     if (s == State::Connecting || s == State::Retrying)
@@ -189,7 +191,13 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         }
         catch (...)
         {
-            MessageBoxW(nullptr, ErrorMessage().c_str(), L"Connecty", MB_ICONERROR);
+            if (UiCheck())
+            {
+                std::ofstream out(Folder() / L"ui-check.log", std::ios::trunc);
+                out << to_string(ErrorMessage());
+                uiCheckResult = 1;
+            }
+            else MessageBoxW(nullptr, ErrorMessage().c_str(), L"Connecty", MB_ICONERROR);
             Exit();
         }
     }
@@ -197,6 +205,24 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     {
         popupOnly = wcsstr(GetCommandLineW(), L"--tray-popup") != nullptr;
         Resources().MergedDictionaries().Append(XamlControlsResources{});
+        if (UiCheck())
+        {
+            auto main = Markup::XamlReader::Load(MainXaml).as<Grid>();
+            auto quick = Markup::XamlReader::Load(PopupXaml).as<FrameworkElement>();
+            auto editor = Markup::XamlReader::Load(EditorXaml).as<ScrollViewer>();
+            auto server = Markup::XamlReader::Load(ServerIconXaml).as<PathIcon>();
+            auto disconnect = Markup::XamlReader::Load(DisconnectIconXaml).as<PathIcon>();
+            main.FindName(L"ClipboardNotice").as<InfoBar>();
+            main.FindName(L"SourceServer").as<PathIcon>();
+            quick.FindName(L"PopupPause").as<Button>();
+            editor.FindName(L"ValidationMessage").as<InfoBar>();
+            uiCheckResult = 0;
+            std::ofstream out(Folder() / L"ui-check.log", std::ios::trunc);
+            out << "Native XAML startup validation passed\n";
+            Exit();
+            return;
+        }
+
         window = Window();
         window.Title(L"Connecty");
         window.SystemBackdrop(MicaBackdrop{});
@@ -383,7 +409,10 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             row.Orientation(Orientation::Horizontal);
             row.Spacing(12);
             row.Padding(railOpen ? Thickness{4, 9, 2, 9} : Thickness{0, 9, 0, 9});
-            row.Children().Append(AccentIcon(L"\xE968", 20));
+            auto server = Markup::XamlReader::Load(ServerIconXaml).as<PathIcon>();
+            server.Width(20); server.Height(20);
+            server.Foreground(StateBrush(State::Verified));
+            row.Children().Append(server);
             StackPanel label;
             label.Spacing(3);
             label.Visibility(railOpen ? Visibility::Visible : Visibility::Collapsed);
@@ -467,8 +496,10 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             .Text(p.direction == L"local" ? L"Local forwarding" : L"Reverse forwarding");
         Get<TextBlock>(L"Host").Text(p.direction == L"local" ? L"This PC" : p.host);
         Get<TextBlock>(L"TargetHost").Text(p.direction == L"local" ? p.host : L"This PC");
-        Get<FontIcon>(L"SourceIcon").Glyph(p.direction == L"local" ? L"\xE7F4" : L"\xE968");
-        Get<FontIcon>(L"TargetIcon").Glyph(p.direction == L"local" ? L"\xE968" : L"\xE7F4");
+        Get<FrameworkElement>(L"SourceServer").Visibility(p.direction == L"local" ? Visibility::Collapsed : Visibility::Visible);
+        Get<FrameworkElement>(L"SourcePc").Visibility(p.direction == L"local" ? Visibility::Visible : Visibility::Collapsed);
+        Get<FrameworkElement>(L"TargetServer").Visibility(p.direction == L"local" ? Visibility::Visible : Visibility::Collapsed);
+        Get<FrameworkElement>(L"TargetPc").Visibility(p.direction == L"local" ? Visibility::Collapsed : Visibility::Visible);
         Get<FontIcon>(L"DirectionIcon").Glyph(p.direction == L"local" ? L"\xE8A7" : L"\xE8AB");
         Get<TextBlock>(L"RemotePort").Text(p.bindAddress + L":" + std::to_wstring(p.remotePort));
         Get<TextBlock>(L"Target").Text(p.target + L":" + std::to_wstring(p.targetPort));
@@ -1055,8 +1086,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         return SUCCEEDED(result) ? 0 : 1;
     }
     SetCurrentProcessExplicitAppUserModelID(L"Chromatic.Connecty");
-    HANDLE mutex = CreateMutexW(nullptr, FALSE, L"Local\\Connecty.SingleInstance");
-    if (GetLastError() == ERROR_ALREADY_EXISTS)
+    HANDLE mutex = UiCheck() ? nullptr : CreateMutexW(nullptr, FALSE, L"Local\\Connecty.SingleInstance");
+    if (!UiCheck() && GetLastError() == ERROR_ALREADY_EXISTS)
     {
         if (HWND existing = FindWindowW(nullptr, L"Connecty"))
             PostMessageW(existing, wcsstr(GetCommandLineW(), L"--tray-popup") ? WM_APP + 11 : WM_APP + 8, 0,
@@ -1075,12 +1106,18 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         check_hresult(MddBootstrapInitialize2(0x00020000, L"", minimum, MddBootstrapInitializeOptions_None));
         init_apartment(apartment_type::single_threaded);
         Application::Start([](auto &&) { make<App>(); });
+        if (UiCheck()) code = uiCheckResult;
         uninit_apartment();
         MddBootstrapShutdown();
     }
     catch (...)
     {
-        MessageBoxW(nullptr, ErrorMessage().c_str(), L"Connecty could not start", MB_ICONERROR);
+        if (UiCheck())
+        {
+            std::ofstream out(Folder() / L"ui-check.log", std::ios::trunc);
+            out << to_string(ErrorMessage());
+        }
+        else MessageBoxW(nullptr, ErrorMessage().c_str(), L"Connecty could not start", MB_ICONERROR);
         code = 1;
     }
     if (mutex)
