@@ -23,9 +23,9 @@ Verified locally on 2026-10-20:
   flushes content for UI-independent persistence and shows a native, three-second
   success InfoBar only after the write succeeds.
 - Native XAML startup validation loads the main screen, tray panel, editor and
-  Fluent path icons without a window or agent connection. It catches the
-  IconSourceElement resource-binding regression; icons now use direct PathIcon
-  controls. This check passed locally on x64.
+  native controls without a window or agent connection. It catches the
+  IconSourceElement resource-binding regression; icons use built-in Windows
+  FontIcon glyphs without custom paths. This check passed locally on x64.
 - The main visual tree is constructed on demand for tray-only launches. No
   numerical cold-start speed claim is made. The built-in animated Settings gear
   uses pointer/focus transitions.

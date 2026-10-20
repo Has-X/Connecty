@@ -210,10 +210,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             auto main = Markup::XamlReader::Load(MainXaml).as<Grid>();
             auto quick = Markup::XamlReader::Load(PopupXaml).as<FrameworkElement>();
             auto editor = Markup::XamlReader::Load(EditorXaml).as<ScrollViewer>();
-            auto server = Markup::XamlReader::Load(ServerIconXaml).as<PathIcon>();
-            auto disconnect = Markup::XamlReader::Load(DisconnectIconXaml).as<PathIcon>();
             main.FindName(L"ClipboardNotice").as<InfoBar>();
-            main.FindName(L"SourceServer").as<PathIcon>();
+            main.FindName(L"SourceServer").as<FontIcon>();
             quick.FindName(L"PopupPause").as<Button>();
             editor.FindName(L"ValidationMessage").as<InfoBar>();
             uiCheckResult = 0;
@@ -409,8 +407,9 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             row.Orientation(Orientation::Horizontal);
             row.Spacing(12);
             row.Padding(railOpen ? Thickness{4, 9, 2, 9} : Thickness{0, 9, 0, 9});
-            auto server = Markup::XamlReader::Load(ServerIconXaml).as<PathIcon>();
-            server.Width(20); server.Height(20);
+            FontIcon server;
+            server.Glyph(L"\xE965");
+            server.FontSize(20);
             server.Foreground(StateBrush(State::Verified));
             row.Children().Append(server);
             StackPanel label;
@@ -529,8 +528,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         connect.Style(Active(s.state) ? Style{nullptr}
                                       : Resources().Lookup(box_value(L"AccentButtonStyle")).as<Style>());
         Get<TextBlock>(L"ConnectText").Text(Active(s.state) ? L"Disconnect" : L"Connect");
-        Get<FontIcon>(L"ConnectIcon").Visibility(Active(s.state) ? Visibility::Visible : Visibility::Collapsed);
-        Get<FrameworkElement>(L"ConnectPlug").Visibility(Active(s.state) ? Visibility::Collapsed : Visibility::Visible);
+        Get<FontIcon>(L"ConnectIcon").Glyph(Active(s.state) ? L"\xE8CD" : L"\xE71B");
         Automation::AutomationProperties::SetName(connect, Active(s.state) ? L"Disconnect" : L"Connect");
         Get<Button>(L"Reconnect").IsEnabled(Active(s.state) && view.online);
         Get<TextBlock>(L"NoLogs").Visibility(s.entries.empty() ? Visibility::Visible : Visibility::Collapsed);
@@ -872,7 +870,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
  <Grid ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
   <FontIcon x:Name="Icon" FontSize="19"/>
   <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center"><TextBlock x:Name="Name" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="State" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
-  <Button x:Name="Toggle" Grid.Column="2" Style="{ThemeResource SubtleButtonStyle}" Width="36" Height="36" Padding="8" VerticalAlignment="Center"><Grid Width="16" Height="16"><FontIcon x:Name="ActionIcon" Glyph="&#xE7E8;" FontSize="15"/><Path x:Name="ActionPlug" Stroke="{ThemeResource AccentTextFillColorPrimaryBrush}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M5,1 L5,5 M11,1 L11,5 M3,5 L13,5 L13,8 C13,11 11,13 8,13 C5,13 3,11 3,8 Z M8,13 L8,16"/></Grid></Button>
+  <Button x:Name="Toggle" Grid.Column="2" Style="{ThemeResource SubtleButtonStyle}" Width="36" Height="36" Padding="8" VerticalAlignment="Center"><FontIcon x:Name="ActionIcon" Glyph="&#xE71B;" FontSize="16"/></Button>
  </Grid>
 </Border>)")
                            .as<Border>();
@@ -885,8 +883,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             statusIcon.Glyph(StateGlyph(s.state));
             statusIcon.Foreground(StateBrush(s.state));
             auto toggle = row.FindName(L"Toggle").as<Button>();
-            row.FindName(L"ActionIcon").as<FontIcon>().Visibility(Active(s.state) ? Visibility::Visible : Visibility::Collapsed);
-            row.FindName(L"ActionPlug").as<FrameworkElement>().Visibility(Active(s.state) ? Visibility::Collapsed : Visibility::Visible);
+            row.FindName(L"ActionIcon").as<FontIcon>().Glyph(Active(s.state) ? L"\xE8CD" : L"\xE71B");
             auto action = (Active(s.state) ? L"Disconnect " : L"Connect ") + p.name;
             Automation::AutomationProperties::SetName(toggle, action);
             ToolTipService::SetToolTip(toggle, box_value(action));
