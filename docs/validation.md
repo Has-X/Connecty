@@ -19,7 +19,9 @@ Verified locally on 2026-10-20:
   logo is preserved; only the solid coloured badge is enlarged, without a rim.
 - Modal requests reserve a shared slot before asynchronous loading; duplicate
   requests are ignored. History has an icon and both explanatory footer
-  paragraphs were removed.
+  paragraphs were removed. Both Copy actions share a clipboard handler that
+  flushes content for UI-independent persistence and shows a native, three-second
+  success InfoBar only after the write succeeds.
 - The main visual tree is constructed on demand for tray-only launches. No
   numerical cold-start speed claim is made. The built-in animated Settings gear
   uses pointer/focus transitions.

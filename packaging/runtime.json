@@ -1,5 +1,13 @@
 {
   "version": "2.5.1",
-  "sha256": "931A421E8DC3E6E67724806CB67FECDBB88DFE323F0170842EB4A4B4B149F1E2",
-  "url": "https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe"
+  "runtimes": {
+    "x64": {
+      "url": "https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe",
+      "sha256": "931A421E8DC3E6E67724806CB67FECDBB88DFE323F0170842EB4A4B4B149F1E2"
+    },
+    "arm64": {
+      "url": "https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-arm64.exe",
+      "sha256": "D5E4D34547EB4E31C64BF1532415B3019C0D92B750E72EB18D3D95BD00FEACBB"
+    }
+  }
 }

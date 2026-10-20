@@ -1,16 +1,20 @@
-# Connecty
+<p align="center">
+  <img src="connecty-github.png" alt="Connecty artwork" width="100%" />
+</p>
 
-<img src="assets/Connecty.png" width="72" alt="Connecty Fluent app icon" />
+<h1 align="center"><img src="assets/Connecty.png" alt="Connecty icon" width="40" height="40" align="absmiddle" /> Connecty</h1>
 
 A small, native Windows tunnel manager. The Rust agent keeps SSH connections
 alive; the C++20 / WinUI 3 window opens only when you need it.
 
 Developed and published by [Chromatic](https://chromatic.hu).
 
+Licensed under **AGPL-3.0-or-later**. Third-party components retain their own licenses.
+
 ## Install
 
-Download **Connecty-Setup-x64.exe** from [Releases](https://github.com/Has-X/Connecty/releases/latest).
-Windows 11 x64 is required. Setup installs for your user without administrator
+Download **Connecty-Setup-x64.exe** or **Connecty-Setup-arm64.exe** from [Releases](https://github.com/Has-X/Connecty/releases/latest).
+Windows 11 x64 or ARM64 is required. Choose the installer matching your device. Setup installs for your user without administrator
 rights and downloads Microsoft's shared Windows App SDK 2 runtime only if needed.
 A portable ZIP is available too; it requires that runtime to be installed already.
 No browser, .NET runtime or OpenSSH client is bundled.
@@ -118,13 +122,15 @@ Install Rust (MSVC target), Visual Studio 2022 desktop C++ tools, CMake/Ninja,
 and a Windows 11 SDK with C++/WinRT. From PowerShell:
 
 ```powershell
-./scripts/build.ps1 -Test -Package
+./scripts/build.ps1 -Test -Package -Architecture x64
+# On an ARM64 Windows machine:
+./scripts/build.ps1 -Test -Package -Architecture arm64
 cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
 ```
 
 The script restores pinned Microsoft build metadata, generates WinRT headers,
 builds both native binaries with a static CRT, runs unit checks and creates
-`dist/Connecty-x64.zip`. Only the small Windows App SDK bootstrap DLL is included;
+`dist/Connecty-x64.zip` or `dist/Connecty-arm64.zip`. Only the small Windows App SDK bootstrap DLL is included;
 the shared WinUI runtime is installed separately. WebView2 metadata is a WinUI
 build reference only; no browser component is shipped or used.
 
@@ -135,7 +141,7 @@ See the [local validation record](docs/validation.md) for completed checks and l
 
 ## Release
 
-MIT licensed. Owner-supplied Fluent artwork: `controlly-logo.png`, optimized to
+AGPL-3.0-or-later; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Owner-supplied Fluent artwork: `controlly-logo.png`, optimized to
 512px with transparency. `scripts/make-icon.ps1` derives Windows icon
 sizes and tray states. Review the ZIP and third-party licenses before publication.
 Releases are currently unsigned. Installer and WinGet details are in

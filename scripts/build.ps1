@@ -1,6 +1,10 @@
 [CmdletBinding()]
-param([switch]$Test, [switch]$Package)
+param([switch]$Test, [switch]$Package, [ValidateSet('x64','arm64')][string]$Architecture='x64')
 $ErrorActionPreference='Stop'
+$hostArch=if([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64'){'arm64'}else{'x64'}
+if($Test -and $Architecture -ne $hostArch){throw 'Run target tests on a Windows machine of the matching architecture.'}
+$triple=if($Architecture -eq 'arm64'){'aarch64-pc-windows-msvc'}else{'x86_64-pc-windows-msvc'}
+
 $root=Split-Path $PSScriptRoot
 Push-Location $root
 try {
@@ -54,21 +58,21 @@ $vs=(& $vswhere -all -latest -products '*' -property installationPath | Select-O
 if(!$vs){throw 'Install Visual Studio 2022 C++ desktop tools.'}
 $ninja=Join-Path $vs 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja'
 $env:PATH="$ninja;$env:PATH"
-$build=Join-Path $root 'build/native'
-& cargo build --manifest-path "$root/agent/Cargo.toml" --release --locked
+$build=Join-Path $root $(if($Architecture -eq 'x64'){'build/native'}else{'build/native-arm64'})
+& cargo build --manifest-path "$root/agent/Cargo.toml" --release --locked --target $triple
 if($LASTEXITCODE){throw 'Rust agent build failed'}
 New-Item -ItemType Directory -Force $build | Out-Null
-$agentSource=Join-Path $root 'agent/target/release/connecty-agent.exe'
+$agentSource=Join-Path $root "agent/target/$triple/release/connecty-agent.exe"
 $agentDestination=Join-Path $build 'Connecty.Agent.exe'
 if(!(Test-Path -LiteralPath $agentDestination) -or (Get-FileHash -LiteralPath $agentSource).Hash -ne (Get-FileHash -LiteralPath $agentDestination).Hash){
   Copy-Item -LiteralPath $agentSource -Destination $agentDestination -Force
 }
-$batch=Join-Path $deps 'compile.cmd'
+$batch=Join-Path $deps "compile-$Architecture.cmd"
 @"
 @echo off
-call "$vs\VC\Auxiliary\Build\vcvars64.bat" >nul
+call "$vs\Common7\Tools\VsDevCmd.bat" -no_logo -arch=$Architecture -host_arch=$hostArch >nul
 if errorlevel 1 exit /b 1
-cmake -S "$root" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCONNECTY_DEPS="$deps"
+cmake -S "$root" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCONNECTY_DEPS="$deps" -DCONNECTY_ARCH=$Architecture
 if errorlevel 1 exit /b 1
 cmake --build "$build" --parallel 2
 exit /b %errorlevel%
@@ -76,13 +80,13 @@ exit /b %errorlevel%
 & $env:ComSpec /d /c $batch
 if($LASTEXITCODE){throw "Native build failed ($LASTEXITCODE)"}
 if($Test){
-  & cargo test --manifest-path "$root/agent/Cargo.toml" --locked
+  & cargo test --manifest-path "$root/agent/Cargo.toml" --locked --target $triple
   if($LASTEXITCODE){throw 'Rust tests failed'}
   & ctest --test-dir $build --output-on-failure; if($LASTEXITCODE){throw 'Frontend tests failed'}
 }
 } finally { Pop-Location }
 if($Package){
-  $dist=Join-Path $root 'dist/Connecty-x64'
+  $dist=Join-Path $root "dist/Connecty-$Architecture"
   New-Item -ItemType Directory -Force $dist | Out-Null
   'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-tray.ico','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico' | ForEach-Object {
     $source=Join-Path $build $_
@@ -91,17 +95,18 @@ if($Package){
       Copy-Item -LiteralPath $source -Destination $destination -Force
     }
   }
-  'README.md','LICENSE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {Copy-Item -LiteralPath "$root/$_" -Destination $dist -Force}
-  (Get-Content -LiteralPath "$root/README.md" -Raw).Replace('assets/Connecty.png','Connecty.png').Replace('installer/assets/preview-dark.png','https://raw.githubusercontent.com/Has-X/Connecty/main/installer/assets/preview-dark.png') | Set-Content -LiteralPath "$dist/README.md"
+  'README.md','LICENSE','NOTICE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {Copy-Item -LiteralPath "$root/$_" -Destination $dist -Force}
+  (Get-Content -LiteralPath "$root/README.md" -Raw).Replace('assets/Connecty.png','Connecty.png').Replace('connecty-github.png','https://raw.githubusercontent.com/Has-X/Connecty/main/connecty-github.png').Replace('installer/assets/preview-dark.png','https://raw.githubusercontent.com/Has-X/Connecty/main/installer/assets/preview-dark.png') | Set-Content -LiteralPath "$dist/README.md"
   Copy-Item -LiteralPath "$root/docs" -Destination $dist -Recurse -Force
   # Release from a fresh allow-listed staging folder, never from a user's portable folder.
   $stage=Join-Path $root ("build/package-"+[guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path $stage | Out-Null
-  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-tray.ico','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico','README.md','LICENSE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {
+  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-tray.ico','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico','README.md','LICENSE','NOTICE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {
     Copy-Item -LiteralPath (Join-Path $dist $_) -Destination $stage
   }
   Copy-Item -LiteralPath "$root/docs" -Destination $stage -Recurse
-  Set-Content -LiteralPath "$root/build/package-stage.txt" -Value $stage
-  Compress-Archive -Path "$stage/*" -DestinationPath "$root/dist/Connecty-x64.zip" -Force
+  Set-Content -LiteralPath "$root/build/package-stage-$Architecture.txt" -Value $stage
+  if($Architecture -eq 'x64'){Set-Content -LiteralPath "$root/build/package-stage.txt" -Value $stage}
+  Compress-Archive -Path "$stage/*" -DestinationPath "$root/dist/Connecty-$Architecture.zip" -Force
   Get-ChildItem $dist | Select-Object Name,Length | Format-Table -AutoSize
 }

@@ -1,0 +1,14 @@
+Connecty
+Copyright (c) 2026 Chromatic
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+Connecty is free software: you can redistribute it and/or modify it under the
+GNU Affero General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.
+It is distributed without warranty. See LICENSE for the complete terms.
+
+Corresponding source and build instructions:
+https://github.com/Has-X/Connecty/tree/v0.3.1
+
+Third-party components retain their original licenses; see
+THIRD-PARTY-NOTICES.md and THIRD-PARTY-LICENSES.txt.

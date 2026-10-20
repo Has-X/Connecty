@@ -10,17 +10,25 @@ if(NOT DEFINED CONNECTY_DEPS)
   message(FATAL_ERROR "Build with scripts/build.ps1 to restore native dependencies.")
 endif()
 include("${CONNECTY_DEPS}/paths.cmake")
+set(CONNECTY_ARCH "x64" CACHE STRING "Target architecture: x64 or arm64")
+if(CONNECTY_ARCH STREQUAL "arm64")
+  set(CONNECTY_MANIFEST_ARCH "arm64")
+else()
+  set(CONNECTY_MANIFEST_ARCH "amd64")
+endif()
+configure_file(assets/app.manifest "${CMAKE_CURRENT_BINARY_DIR}/Connecty.manifest" @ONLY)
+
 add_executable(Connecty WIN32 src/App.cpp src/Core.cpp assets/Connecty.rc)
 set_source_files_properties(assets/Connecty.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty.ico")
 target_include_directories(Connecty PRIVATE "${CONNECTY_DEPS}/generated" "${SDK_FOUNDATION}/include" "${SDK_WINUI}/include" "${SDK_INTERACTIVE}/include")
 target_compile_definitions(Connecty PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(Connecty PRIVATE /W4 /EHsc /bigobj /utf-8 /permissive- $<$<CONFIG:Release>:/GL>)
-target_link_directories(Connecty PRIVATE "${SDK_FOUNDATION}/lib/native/x64")
+target_link_directories(Connecty PRIVATE "${SDK_FOUNDATION}/lib/native/${CONNECTY_ARCH}")
 target_link_libraries(Connecty PRIVATE windowsapp Microsoft.WindowsAppRuntime.Bootstrap user32 shell32 advapi32 comctl32 dwmapi ole32)
-target_link_options(Connecty PRIVATE /MANIFEST:EMBED "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/assets/app.manifest" $<$<CONFIG:Release>:/LTCG> $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
+target_link_options(Connecty PRIVATE /MANIFEST:EMBED "/MANIFESTINPUT:${CMAKE_CURRENT_BINARY_DIR}/Connecty.manifest" $<$<CONFIG:Release>:/LTCG> $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
 target_link_options(Connecty PRIVATE "/MAP:${CMAKE_CURRENT_BINARY_DIR}/Connecty.map")
 add_custom_command(TARGET Connecty POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SDK_FOUNDATION}/runtimes/win-x64/native/Microsoft.WindowsAppRuntime.Bootstrap.dll" "$<TARGET_FILE_DIR:Connecty>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SDK_FOUNDATION}/runtimes/win-${CONNECTY_ARCH}/native/Microsoft.WindowsAppRuntime.Bootstrap.dll" "$<TARGET_FILE_DIR:Connecty>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty.ico" "$<TARGET_FILE_DIR:Connecty>")
 add_custom_command(TARGET Connecty POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty.png" "$<TARGET_FILE_DIR:Connecty>"

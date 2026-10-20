@@ -4,7 +4,17 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+            native: build/native
+          - arch: arm64
+            runner: windows-11-arm
+            native: build/native-arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
@@ -12,13 +22,13 @@ jobs:
           components: rustfmt, clippy
       - name: Build, test, and package
         shell: pwsh
-        run: ./scripts/build.ps1 -Test -Package
+        run: ./scripts/build.ps1 -Test -Package -Architecture ${{ matrix.arch }}
       - name: Rust lint
         run: cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust formatting
         run: cargo fmt --manifest-path agent/Cargo.toml -- --check
       - name: Agent crash and storage integration
-        run: python scripts/test-supervisor.py --agent build/native/Connecty.Agent.exe --data build/ci-agent-test
+        run: python scripts/test-supervisor.py --agent ${{ matrix.native }}/Connecty.Agent.exe --data build/ci-agent-test
       - name: Dependency advisory check
         shell: pwsh
         run: |
@@ -31,14 +41,14 @@ jobs:
       - name: Build installer and WinGet metadata
         shell: pwsh
         run: |
-          ./scripts/build-installer.ps1
+          ./scripts/build-installer.ps1 -Architecture ${{ matrix.arch }}
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./scripts/make-winget.ps1
+          ./scripts/make-winget.ps1 -Architectures ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: Connecty-x64
+          name: Connecty-${{ matrix.arch }}
           path: |
-            dist/Connecty-x64.zip
-            dist/Connecty-Setup-x64.exe
+            dist/Connecty-${{ matrix.arch }}.zip
+            dist/Connecty-Setup-${{ matrix.arch }}.exe
             dist/SHA256SUMS.txt
             packaging/winget/

@@ -147,6 +147,9 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     Grid root{nullptr};
     FrameworkElement popupRoot{nullptr};
     HWND hwnd{}, popupHwnd{};
+    HHOOK popupMouseHook{};
+    inline static App *popupHookOwner = nullptr;
+    Microsoft::UI::Dispatching::DispatcherQueueTimer clipboardTimer{nullptr};
     bool quitting = false, rebuilding = false, mainVisible = false, popupOnly = false, railOpen = true,
          mainReady = false, dialogBusy = false;
     int selected = -1;
@@ -241,13 +244,13 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         });
         Get<Button>(L"BrowseLogs").Click([this](auto &&, auto &&) { History(); });
         Get<Button>(L"OpenLog").Click([this](auto &&, auto &&) {
-            Windows::ApplicationModel::DataTransfer::DataPackage package;
-            std::wstring text;
-            if (selected >= 0)
-                for (auto const &entry : Connection(profiles[selected].id).entries)
-                    text += LogTime(entry.time) + L"  " + profiles[selected].name + L"  " + entry.level + L"  " + entry.message + L"\n";
-            package.SetText(text);
-            Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+            Guard([&] {
+                std::wstring text;
+                if (selected >= 0)
+                    for (auto const &entry : Connection(profiles[selected].id).entries)
+                        text += LogTime(entry.time) + L"  " + profiles[selected].name + L"  " + entry.level + L"  " + entry.message + L"\n";
+                CopyText(text);
+            });
         });
         Get<Button>(L"Settings").Click([this](auto &&, auto &&) { Settings(); });
         root.ActualThemeChanged([this](auto &&, auto &&) {
@@ -313,6 +316,31 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         button.PointerExited([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"Normal"); });
         button.GotFocus([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"PointerOver"); });
         button.LostFocus([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"Normal"); });
+    }
+    void CopyText(std::wstring const &text)
+    {
+        using namespace Windows::ApplicationModel::DataTransfer;
+        DataPackage package;
+        package.SetText(text);
+        Clipboard::SetContent(package);
+        Clipboard::Flush();
+        ShowCopied();
+    }
+    void ShowCopied()
+    {
+        auto notice = Get<InfoBar>(L"ClipboardNotice");
+        notice.IsOpen(true);
+        if (!clipboardTimer)
+        {
+            clipboardTimer = window.DispatcherQueue().CreateTimer();
+            clipboardTimer.IsRepeating(false);
+            clipboardTimer.Interval(std::chrono::seconds(3));
+            clipboardTimer.Tick([weak = get_weak()](auto &&, auto &&) {
+                if (auto app = weak.get()) app->Get<InfoBar>(L"ClipboardNotice").IsOpen(false);
+            });
+        }
+        clipboardTimer.Stop();
+        clipboardTimer.Start();
     }
     void ToggleRail()
     {
@@ -719,8 +747,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             dialog.Content(panel); dialog.PrimaryButtonText(L"Copy"); dialog.CloseButtonText(L"Close");
             if (co_await dialog.ShowAsync() == ContentDialogResult::Primary)
             {
-                Windows::ApplicationModel::DataTransfer::DataPackage package; package.SetText(*exported);
-                Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+                CopyText(*exported);
             }
         }
         catch (...) { modal.Release(); ShowError(ErrorMessage()); }
@@ -781,7 +808,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         mainVisible = true;
         popupOnly = false;
         if (popup)
-            popup.AppWindow().Hide();
+            HidePopup();
         window.AppWindow().Show();
         window.Activate();
         ShowWindow(hwnd, SW_RESTORE);
@@ -861,6 +888,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             popupRoot = Markup::XamlReader::Load(PopupXaml).as<FrameworkElement>();
             popup.Content(popupRoot);
             check_hresult(popup.as<IWindowNative>()->get_WindowHandle(&popupHwnd));
+            SetWindowSubclass(popupHwnd, PopupSubclass, 2, reinterpret_cast<DWORD_PTR>(this));
             auto presenter =
                 popup.AppWindow().Presenter().as<Microsoft::UI::Windowing::OverlappedPresenter>();
             presenter.SetBorderAndTitleBar(false, false);
@@ -886,9 +914,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                 if (e.Key() == Windows::System::VirtualKey::Escape)
                 {
                     e.Handled(true);
-                    popup.AppWindow().Hide();
-                    if (popupOnly && !mainVisible)
-                        Quit();
+                    HidePopup();
                 }
             });
             Logo(popupRoot.FindName(L"PopupLogo").as<Image>());
@@ -909,9 +935,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             popup.Activated([this](auto &&, WindowActivatedEventArgs const &e) {
                 if (e.WindowActivationState() == WindowActivationState::Deactivated)
                 {
-                    popup.AppWindow().Hide();
-                    if (popupOnly && !mainVisible)
-                        Quit();
+                    HidePopup();
                 }
             });
         }
@@ -933,12 +957,55 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         popup.Activate();
         SetForegroundWindow(popupHwnd);
         popupRoot.FindName(L"PopupOpen").as<Button>().Focus(FocusState::Programmatic);
+        if (!popupMouseHook)
+        {
+            popupHookOwner = this;
+            popupMouseHook = SetWindowsHookExW(WH_MOUSE_LL, PopupMouse, GetModuleHandleW(nullptr), 0);
+        }
+    }
+    void DisarmPopup()
+    {
+        if (popupMouseHook) { UnhookWindowsHookEx(popupMouseHook); popupMouseHook = nullptr; }
+        if (popupHookOwner == this) popupHookOwner = nullptr;
+    }
+    void HidePopup()
+    {
+        DisarmPopup();
+        if (popup) popup.AppWindow().Hide();
+        if (popupOnly && !mainVisible) Quit();
+    }
+    static LRESULT CALLBACK PopupMouse(int code, WPARAM message, LPARAM data)
+    {
+        // Only while the panel is visible. Never consume or record outside input.
+        auto app = popupHookOwner;
+        if (code == HC_ACTION && app && (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
+                                        message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN))
+        {
+            RECT bounds{};
+            auto point = reinterpret_cast<MSLLHOOKSTRUCT const *>(data)->pt;
+            if (GetWindowRect(app->popupHwnd, &bounds) && !PtInRect(&bounds, point))
+                PostMessageW(app->popupHwnd, WM_APP + 12, 0, 0);
+        }
+        return CallNextHookEx(nullptr, code, message, data);
+    }
+    static LRESULT CALLBACK PopupSubclass(HWND h, UINT message, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR data)
+    {
+        auto app = reinterpret_cast<App *>(data);
+        if (message == WM_APP + 12 || message == WM_CANCELMODE || message == WM_CLOSE)
+        {
+            app->HidePopup();
+            return 0;
+        }
+        return DefSubclassProc(h, message, w, l);
     }
     void Quit()
     {
         if (quitting)
             return;
         quitting = true;
+        DisarmPopup();
+        if (popupHwnd) RemoveWindowSubclass(popupHwnd, PopupSubclass, 2);
+        if (clipboardTimer) clipboardTimer.Stop();
         AgentClient::Instance().OnChanged({});
         RemoveWindowSubclass(hwnd, Subclass, 1);
         if (popup)

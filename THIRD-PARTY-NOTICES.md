@@ -1,3 +1,6 @@
+Connecty is Copyright (c) 2026 Chromatic, licensed under AGPL-3.0-or-later.
+Third-party components below retain their original licenses.
+
 Connecty uses the Microsoft Windows App SDK and C++/WinRT projection headers.
 These are Microsoft projects distributed under their respective package licenses:
 

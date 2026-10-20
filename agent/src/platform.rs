@@ -295,7 +295,9 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
                 if event == WM_CONTEXTMENU {
                     command.arg("--tray-popup");
                 }
-                let _ = command.creation_flags(CREATE_NO_WINDOW).spawn();
+                if let Ok(child) = command.creation_flags(CREATE_NO_WINDOW).spawn() {
+                    AllowSetForegroundWindow(child.id());
+                }
             }
             return 0;
         }

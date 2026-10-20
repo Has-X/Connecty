@@ -31,6 +31,7 @@ LR"xaml(
    </Grid>
   </Border>
  </Grid>
+ <InfoBar x:Name="ClipboardNotice" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16,0,24,20" MaxWidth="320" IsOpen="False" IsClosable="False" Severity="Success" Message="Copied to clipboard" AutomationProperties.LiveSetting="Polite"/>
 </Grid>)xaml";
 inline constexpr wchar_t EditorXaml[]=LR"xaml(
 <ScrollViewer xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:av="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals" MaxHeight="470"><StackPanel Spacing="12" MinWidth="390" Padding="0,0,10,6">

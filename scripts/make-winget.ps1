@@ -1,10 +1,14 @@
 [CmdletBinding()]
-param([string]$Version='0.3.1')
+param([string]$Version='0.3.1', [ValidateSet('x64','arm64')][string[]]$Architectures=@('x64','arm64'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
 $manifest=Join-Path $root "packaging/winget/manifests/c/Chromatic/Connecty/$Version"
 New-Item -ItemType Directory -Path $manifest -Force | Out-Null
-$hash=(Get-FileHash -LiteralPath "$root/dist/Connecty-Setup-x64.exe" -Algorithm SHA256).Hash
+$installers=foreach($arch in $Architectures){
+  $hash=(Get-FileHash -LiteralPath "$root/dist/Connecty-Setup-$arch.exe" -Algorithm SHA256).Hash
+  "- Architecture: $arch`n  InstallerUrl: https://github.com/Has-X/Connecty/releases/download/v$Version/Connecty-Setup-$arch.exe`n  InstallerSha256: $hash"
+}
+$installerRows=$installers -join "`n"
 @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 PackageIdentifier: Chromatic.Connecty
@@ -24,7 +28,7 @@ PublisherSupportUrl: https://github.com/Has-X/Connecty/issues
 Author: Chromatic
 PackageName: Connecty
 PackageUrl: https://github.com/Has-X/Connecty
-License: MIT
+License: AGPL-3.0-or-later
 LicenseUrl: https://github.com/Has-X/Connecty/blob/main/LICENSE
 Copyright: Copyright (c) 2026 Chromatic
 ShortDescription: Lightweight native Windows SSH tunnel manager with a WinUI 3 interface and an independent Rust agent.
@@ -68,13 +72,11 @@ AppsAndFeaturesEntries:
   ProductCode: '{C857E631-EF51-4D52-BCE6-9B9475A9CB9F}_is1'
 ElevationRequirement: elevationProhibited
 Installers:
-- Architecture: x64
-  InstallerUrl: https://github.com/Has-X/Connecty/releases/download/v$Version/Connecty-Setup-x64.exe
-  InstallerSha256: $hash
+$installerRows
 ManifestType: installer
 ManifestVersion: 1.12.0
 "@ | Set-Content "$manifest/Chromatic.Connecty.installer.yaml"
-$files='Connecty-Setup-x64.exe','Connecty-x64.zip'
+$files=foreach($arch in $Architectures){"Connecty-Setup-$arch.exe";"Connecty-$arch.zip"}
 $sums=foreach($name in $files){"$((Get-FileHash -LiteralPath "$root/dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant())  $name"}
 $sums | Set-Content "$root/dist/SHA256SUMS.txt"
 Write-Output $manifest

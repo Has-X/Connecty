@@ -1,3 +1,11 @@
+#ifndef AppArch
+  #define AppArch "x64"
+#endif
+#if AppArch == "arm64"
+  #define AllowedArch "arm64"
+#else
+  #define AllowedArch "x64os"
+#endif
 #ifndef AppVersion
   #define AppVersion "0.3.1"
 #endif
@@ -27,15 +35,15 @@ VersionInfoCopyright=Copyright (c) 2026 Chromatic
 DefaultDirName={localappdata}\Programs\Chromatic\Connecty
 DefaultGroupName=Connecty
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64os
-ArchitecturesInstallIn64BitMode=x64os
+ArchitecturesAllowed={#AllowedArch}
+ArchitecturesInstallIn64BitMode={#AllowedArch}
 SetupArchitecture=x64
 MinVersion=10.0.22000
 UninstallDisplayIcon={app}\Connecty.exe
 UninstallDisplayName=Connecty
 SetupIconFile=..\assets\Connecty.ico
 OutputDir={#OutputDir}
-OutputBaseFilename=Connecty-Setup-x64
+OutputBaseFilename=Connecty-Setup-{#AppArch}
 WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=110,110
 WizardKeepAspectRatio=yes
