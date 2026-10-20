@@ -7,16 +7,23 @@
 <p align="center">
   <a href="https://github.com/Has-X/Connecty/actions/workflows/build.yml"><img src="https://github.com/Has-X/Connecty/actions/workflows/build.yml/badge.svg" alt="Native Windows build" /></a>
   <img src="https://img.shields.io/badge/Windows_11-x64_%7C_ARM64-0078D4" alt="Windows 11 x64 and ARM64" />
+  <img src="https://img.shields.io/badge/design-Fluent_2-0078D4" alt="Fluent 2 design" />
+  <img src="https://img.shields.io/badge/built_with-WinUI_3-0078D4" alt="Built with WinUI 3" />
+  <img src="https://img.shields.io/badge/Made%20in-the%20EU%20%F0%9F%87%AA%F0%9F%87%BA-003399" alt="Made in the EU" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-444444" alt="AGPL-3.0-or-later" /></a>
 </p>
 
-Connecty keeps reverse and local SSH tunnels running in the background, with a
-compact WinUI 3 and Fluent 2 interface. The independent Rust agent reconnects
-automatically and keeps working when the window is closed.
+Connecty is a lightweight SSH tunnel manager for Windows 11, built with WinUI 3
+and Fluent 2. Its independent Rust agent keeps reverse and local tunnels running,
+reconnects automatically and continues working when the window is closed.
 
 Developed and published by [Chromatic](https://chromatic.hu).
 
 Licensed under **AGPL-3.0-or-later**. Third-party components retain their own licenses.
+
+<p align="center">
+  <img src="assets/showcase.png" alt="Connecty managing a verified reverse SSH tunnel on Windows 11" width="954" />
+</p>
 
 ## Install
 
@@ -26,7 +33,8 @@ rights and downloads Microsoft's shared Windows App SDK 2 runtime only if needed
 A portable ZIP is available too; it requires that runtime to be installed already.
 No browser, .NET runtime or OpenSSH client is bundled.
 
-<img src="installer/assets/preview-dark.png" alt="Connecty installer" width="549" />
+The [WinGet submission](https://github.com/microsoft/winget-pkgs/pull/456990) for
+`Chromatic.Connecty` is under review.
 
 ## Use
 

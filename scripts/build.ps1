@@ -96,7 +96,7 @@ if($Package){
     }
   }
   'README.md','LICENSE','NOTICE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {Copy-Item -LiteralPath "$root/$_" -Destination $dist -Force}
-  (Get-Content -LiteralPath "$root/README.md" -Raw).Replace('assets/Connecty.png','Connecty.png').Replace('connecty-github.png','https://raw.githubusercontent.com/Has-X/Connecty/main/connecty-github.png').Replace('installer/assets/preview-dark.png','https://raw.githubusercontent.com/Has-X/Connecty/main/installer/assets/preview-dark.png') | Set-Content -LiteralPath "$dist/README.md"
+  (Get-Content -LiteralPath "$root/README.md" -Raw).Replace('assets/Connecty.png','Connecty.png').Replace('assets/showcase.png','https://raw.githubusercontent.com/Has-X/Connecty/main/assets/showcase.png').Replace('connecty-github.png','https://raw.githubusercontent.com/Has-X/Connecty/main/connecty-github.png').Replace('installer/assets/preview-dark.png','https://raw.githubusercontent.com/Has-X/Connecty/main/installer/assets/preview-dark.png') | Set-Content -LiteralPath "$dist/README.md"
   Copy-Item -LiteralPath "$root/docs" -Destination $dist -Recurse -Force
   # Release from a fresh allow-listed staging folder, never from a user's portable folder.
   $stage=Join-Path $root ("build/package-"+[guid]::NewGuid().ToString('N'))
