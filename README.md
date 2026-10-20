@@ -17,12 +17,8 @@ Connecty is a lightweight SSH tunnel manager for Windows 11, built with WinUI 3
 and Fluent 2. Its independent Rust agent keeps reverse and local tunnels running,
 reconnects automatically and continues working when the window is closed.
 
-Developed and published by [Chromatic](https://chromatic.hu).
-
-Licensed under **AGPL-3.0-or-later**. Third-party components retain their own licenses.
-
 <p align="center">
-  <img src="assets/showcase.png" alt="Connecty managing a verified reverse SSH tunnel on Windows 11" width="954" />
+  <img src="assets/showcase.png" alt="Connecty managing a verified reverse SSH tunnel on Windows 11" width="100%" />
 </p>
 
 ## Install
@@ -158,7 +154,10 @@ See the [local validation record](docs/validation.md) for completed checks and l
 
 ## Release
 
-AGPL-3.0-or-later; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Owner-supplied Fluent artwork: `controlly-logo.png`, optimized to
+Developed and published by [Chromatic](https://chromatic.hu). Licensed under
+[AGPL-3.0-or-later](LICENSE); third-party components retain their own licenses.
+
+Owner-supplied Fluent artwork: `controlly-logo.png`, optimized to
 512px with transparency. `scripts/make-icon.ps1` derives Windows icon
 sizes and tray states. Releases include source and SHA-256 checksums.
 Releases are currently unsigned. Installer and WinGet details are in
