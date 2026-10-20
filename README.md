@@ -17,6 +17,11 @@ Connecty is a lightweight SSH tunnel manager for Windows 11, built with WinUI 3
 and Fluent 2. Its independent Rust agent keeps reverse and local tunnels running,
 reconnects automatically and continues working when the window is closed.
 
+Connecty is designed to stay small: the portable downloads are about **2.1 MB
+(x64)** and **2.0 MB (ARM64)**, while the per-user installers are about **5.6 MB**.
+In one idle Windows 11 Task Manager snapshot, the two background-agent processes
+used about **1.6 MB combined working set**; memory use varies by system and activity.
+The shared Windows App SDK runtime is downloaded only when it is not already installed.
 <p align="center">
   <img src="assets/showcase.png" alt="Connecty managing a verified reverse SSH tunnel on Windows 11" width="100%" />
 </p>
