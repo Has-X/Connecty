@@ -8,7 +8,7 @@ PublisherSupportUrl: https://github.com/Has-X/Connecty/issues
 Author: Chromatic
 PackageName: Connecty
 PackageUrl: https://github.com/Has-X/Connecty
-License: MIT
+License: AGPL-3.0-or-later
 LicenseUrl: https://github.com/Has-X/Connecty/blob/main/LICENSE
 Copyright: Copyright (c) 2026 Chromatic
 ShortDescription: Lightweight native Windows SSH tunnel manager with a WinUI 3 interface and an independent Rust agent.
