@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod config;
 mod ipc;
+mod journal;
 mod manager;
 mod model;
 mod platform;
@@ -132,6 +133,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::copy(&path, dir.join("profiles.pre-agent.json"))?;
     }
     let store = state::Store::new(snapshot);
+    let journal = journal::Journal::start(dir.clone()).await;
+    let _ = store.journal.set(journal.clone());
     let shutdown = CancellationToken::new();
     let (recovery_tx, recovery_rx) = watch::channel(ssh::Recovery::Ready);
     platform::start(
@@ -177,6 +180,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     notifier.abort();
+    // Drain queued records after graceful tunnel cleanup, before the runtime exits.
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        journal.request(serde_json::json!({"op":"log_options"})),
+    )
+    .await;
     platform::stop();
     Ok(())
 }

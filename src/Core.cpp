@@ -318,7 +318,7 @@ void AgentClient::Receive(std::wstring const &message)
                 auto entry = row.GetObject();
                 LogEntry log{uint64_t(entry.GetNamedNumber(L"time")), entry.GetNamedString(L"level").c_str(),
                              entry.GetNamedString(L"code").c_str(), entry.GetNamedString(L"message").c_str()};
-                s.logs += log.message + L"\n";
+                s.logs += std::to_wstring(log.time) + L" " + log.level + L" " + log.code + L" " + log.message + L"\n";
                 s.entries.push_back(std::move(log));
             }
             view.connections.emplace(item.Key(), std::move(s));
@@ -418,7 +418,7 @@ void AgentClient::Run()
             break;
     }
 }
-void AgentClient::Command(std::wstring const &op, std::wstring const &id, JsonObject extra)
+JsonObject AgentClient::Command(std::wstring const &op, std::wstring const &id, JsonObject extra)
 {
     if (op == L"shutdown")
         stopAgent_ = true;
@@ -461,6 +461,7 @@ void AgentClient::Command(std::wstring const &op, std::wstring const &id, JsonOb
         auto e = response.GetNamedObject(L"error");
         throw std::runtime_error(to_string(e.GetNamedString(L"message", L"Agent rejected request")));
     }
+    return response;
 }
 std::vector<Profile> LoadProfiles()
 {

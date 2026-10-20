@@ -90,6 +90,7 @@ pub fn verify_key(path: &Path, host: &str, port: u16, key: &PublicKey) -> Result
 struct Incoming {
     channel: Channel<client::Msg>,
     reply: client::ChannelOpenHandle,
+    origin: String,
 }
 struct Handler {
     endpoint: Resolved,
@@ -127,8 +128,8 @@ impl client::Handler for Handler {
         channel: Channel<client::Msg>,
         address: &str,
         port: u32,
-        _origin: &str,
-        _origin_port: u32,
+        origin: &str,
+        origin_port: u32,
         reply: client::ChannelOpenHandle,
         _session: &mut client::Session,
     ) -> Result<(), Failure> {
@@ -139,7 +140,11 @@ impl client::Handler for Handler {
             return Ok(());
         }
         // A full bounded queue drops the reply handle, rejecting the channel.
-        let _ = self.incoming.try_send(Incoming { channel, reply });
+        let _ = self.incoming.try_send(Incoming {
+            channel,
+            reply,
+            origin: format!("{origin}:{origin_port}"),
+        });
         Ok(())
     }
 }
@@ -307,7 +312,20 @@ async fn session(
         )
     };
     publisher.status("forwarding", "Tunnel is ready", None);
-    publisher.log("info", "connected", "Secure tunnel established");
+    publisher.log(
+        "info",
+        "connected",
+        &format!(
+            "Authenticated {}@{}:{}; {}:{} forwards to {}:{}",
+            endpoint.user,
+            endpoint.host,
+            endpoint.port,
+            p.bind_address,
+            p.remote_port,
+            p.target,
+            p.target_port
+        ),
+    );
     let mut streams = JoinSet::new();
     let mut verification = JoinSet::new();
     let mut verify = tokio::time::interval(Duration::from_secs(60));
@@ -327,14 +345,23 @@ async fn session(
                 if streams.len() >= MAX_STREAMS { drop(request); continue; }
                 let target = p.target.clone();
                 let port = p.target_port;
+                let log = publisher.clone();
                 streams.spawn(async move {
                     match timeout(Duration::from_secs(10), TcpStream::connect((target.as_str(), port))).await {
                         Ok(Ok(mut socket)) => {
                             request.reply.accept().await;
+                            log.log("info", "stream_open", &format!("{} connected to {target}:{port} (reverse)", request.origin));
                             let mut channel = request.channel.into_stream();
-                            let _ = io::copy_bidirectional(&mut channel, &mut socket).await;
+                            let result = io::copy_bidirectional(&mut channel, &mut socket).await;
+                            match result {
+                                Ok((received, sent)) => log.log("info", "stream_closed", &format!("{} disconnected; {received} bytes received, {sent} sent", request.origin)),
+                                Err(e) => log.log("warn", "stream_error", &format!("{}: {e}", request.origin)),
+                            }
                         }
-                        _ => request.reply.reject(ChannelOpenFailure::ConnectFailed).await,
+                        _ => {
+                            log.log("warn", "stream_rejected", &format!("{} could not reach {target}:{port}", request.origin));
+                            request.reply.reject(ChannelOpenFailure::ConnectFailed).await;
+                        },
                     }
                 });
             },
@@ -355,9 +382,14 @@ async fn session(
                         continue;
                     }
                 };
+                publisher.log("info", "stream_open", &format!("{origin} connected to {}:{} (local)", p.target, p.target_port));
+                let log = publisher.clone();
                 streams.spawn(async move {
                     let mut channel = channel.into_stream();
-                    let _ = io::copy_bidirectional(&mut channel, &mut socket).await;
+                    match io::copy_bidirectional(&mut channel, &mut socket).await {
+                        Ok((received, sent)) => log.log("info", "stream_closed", &format!("{origin} disconnected; {received} bytes received, {sent} sent")),
+                        Err(e) => log.log("warn", "stream_error", &format!("{origin}: {e}")),
+                    }
                 });
             },
             _ = verify.tick(), if !p.probe.is_empty() && verification.is_empty() => {

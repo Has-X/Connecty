@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Connecty VERSION 0.3.0 LANGUAGES CXX RC)
+project(Connecty VERSION 0.3.1 LANGUAGES CXX RC)
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Connecty requires Windows and the MSVC C++ toolchain.")
 endif()
@@ -24,6 +24,7 @@ add_custom_command(TARGET Connecty POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty.ico" "$<TARGET_FILE_DIR:Connecty>")
 add_custom_command(TARGET Connecty POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty.png" "$<TARGET_FILE_DIR:Connecty>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty-tray.ico" "$<TARGET_FILE_DIR:Connecty>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty-live.ico" "$<TARGET_FILE_DIR:Connecty>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty-retry.ico" "$<TARGET_FILE_DIR:Connecty>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/Connecty-error.ico" "$<TARGET_FILE_DIR:Connecty>")

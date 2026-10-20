@@ -112,3 +112,22 @@ including folders resolved through Windows package file redirection.
 The Inno Setup package uses clean allow-listed staging. It bootstraps the shared
 Microsoft UI runtime only if the native runtime probe fails, with a pinned
 download hash. No UI/browser/.NET runtime is embedded in the application.
+
+The WinUI process exits when its main window closes or its standalone tray panel
+is dismissed. A tray-only launch creates only the quick-controls surface; the
+main XAML tree and profile list are initialized on first full-window
+activation. The agent and its tray icon remain independent of that lifecycle.
+
+## Connection history
+
+The metadata journal uses a bounded 128-record queue and a serial asynchronous
+worker. File operations execute on Tokio blocking workers, outside the SSH
+reactor. A busy queue drops audit records rather than stalling forwarding; the
+history response reports that count. No payload or credential logging is used.
+Two rotating JSONL files bound disk usage; cleanup is triggered by writes and
+history requests. Logging options are stored atomically in logging.json.
+History IPC is capped at 256 records and log-file reads have byte/record limits.
+The UI requests history/settings off its main thread. Recent snapshots retain
+only 32 records per connection. On graceful shutdown the journal drains queued
+records with a bounded deadline. This is a local troubleshooting history, not
+a tamper-proof authentication audit.

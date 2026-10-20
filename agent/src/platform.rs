@@ -214,7 +214,7 @@ pub fn update_tray(snapshot: &crate::model::Snapshot) {
             } else if connected > 0 {
                 "Connecty-live.ico"
             } else {
-                "Connecty.ico"
+                "Connecty-tray.ico"
             }
             .into(),
         );
@@ -335,7 +335,7 @@ pub fn start(
             ui,
             summary: std::sync::Mutex::new((
                 "Connecty · background agent".into(),
-                "Connecty.ico".into(),
+                "Connecty-tray.ico".into(),
             )),
             show_tray,
             thread: std::sync::Mutex::new(None),

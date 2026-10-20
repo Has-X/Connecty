@@ -192,7 +192,7 @@ pub struct ConnectionState {
     pub since: u64,
     pub logs: VecDeque<LogEntry>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogEntry {
     pub time: u64,
     pub level: String,

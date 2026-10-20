@@ -82,7 +82,7 @@ class AgentClient
     void Start();
     void OnChanged(std::function<void()> callback);
     AgentView Read() const;
-    void Command(std::wstring const &op, std::wstring const &id = L"",
+    winrt::Windows::Data::Json::JsonObject Command(std::wstring const &op, std::wstring const &id = L"",
                  winrt::Windows::Data::Json::JsonObject extra = {});
 };
 class Tunnel

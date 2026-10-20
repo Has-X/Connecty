@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <ctime>
+#include <cwctype>
 #include <dwmapi.h>
 #include <shobjidl.h>
 using namespace winrt;
@@ -17,6 +18,16 @@ using namespace Microsoft::UI::Xaml::Media;
 using namespace connecty;
 namespace
 {
+// Reserve the modal slot before asynchronous preparation as well as ShowAsync.
+struct DialogScope
+{
+    bool &busy;
+    bool acquired;
+    explicit DialogScope(bool &value) : busy(value), acquired(!value) { if (acquired) busy = true; }
+    ~DialogScope() { Release(); }
+    explicit operator bool() const { return acquired; }
+    void Release() { if (acquired) { busy = false; acquired = false; } }
+};
 bool Active(State s)
 {
     return s == State::Connecting || s == State::Forwarding || s == State::Verified || s == State::Retrying ||
@@ -85,6 +96,21 @@ std::wstring Clock(uint64_t value)
     wcsftime(text, 16, L"%H:%M", &local);
     return text;
 }
+std::wstring LogTime(uint64_t value)
+{
+    std::time_t time = std::time_t(value);
+    std::tm local{};
+    localtime_s(&local, &time);
+    wchar_t text[32]{};
+    wcsftime(text, 32, L"%Y-%m-%d %H:%M:%S", &local);
+    return text;
+}
+Windows::Foundation::IAsyncOperation<Windows::Data::Json::JsonObject>
+RequestAsync(std::wstring op, std::wstring id = L"", Windows::Data::Json::JsonObject extra = {})
+{
+    co_await resume_background();
+    co_return AgentClient::Instance().Command(op, id, extra);
+}
 std::filesystem::path Folder()
 {
     wchar_t path[32768]{};
@@ -121,7 +147,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     Grid root{nullptr};
     FrameworkElement popupRoot{nullptr};
     HWND hwnd{}, popupHwnd{};
-    bool quitting = false, rebuilding = false, mainVisible = false, popupOnly = false, railOpen = true;
+    bool quitting = false, rebuilding = false, mainVisible = false, popupOnly = false, railOpen = true,
+         mainReady = false, dialogBusy = false;
     int selected = -1;
     std::vector<Profile> profiles;
     std::vector<TextBlock> rowStates;
@@ -170,9 +197,22 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         window = Window();
         window.Title(L"Connecty");
         window.SystemBackdrop(MicaBackdrop{});
+        check_hresult(window.as<IWindowNative>()->get_WindowHandle(&hwnd));
+        SetWindowSubclass(hwnd, Subclass, 1, reinterpret_cast<DWORD_PTR>(this));
+        AgentClient::Instance().OnChanged([handle = hwnd] { PostMessageW(handle, WM_APP + 10, 0, 0); });
+        profiles = LoadProfiles();
+        if (popupOnly)
+            ShowPopup();
+        else
+            Show();
+    }
+    // A cold tray click should not construct the full main-window visual tree.
+    void EnsureMain()
+    {
+        if (mainReady)
+            return;
         root = Markup::XamlReader::Load(MainXaml).as<Grid>();
         window.Content(root);
-        check_hresult(window.as<IWindowNative>()->get_WindowHandle(&hwnd));
         window.AppWindow().Resize({840, 600});
         window.AppWindow().SetIcon((Folder() / L"Connecty.ico").c_str());
         if (auto presenter =
@@ -187,9 +227,6 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             Microsoft::UI::Windowing::TitleBarHeightOption::Tall);
         Get<TitleBar>(L"TitleBar").PaneToggleRequested([this](auto &&, auto &&) { ToggleRail(); });
         Logo(Get<Image>(L"Logo"));
-        profiles = LoadProfiles();
-        SetWindowSubclass(hwnd, Subclass, 1, reinterpret_cast<DWORD_PTR>(this));
-        AgentClient::Instance().OnChanged([handle = hwnd] { PostMessageW(handle, WM_APP + 10, 0, 0); });
         Get<Button>(L"Add").Click([this](auto &&, auto &&) { Edit(false); });
         Get<Button>(L"FirstAdd").Click([this](auto &&, auto &&) { Edit(false); });
         Get<Button>(L"Edit").Click([this](auto &&, auto &&) { Edit(true); });
@@ -202,9 +239,14 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             if (selected >= 0)
                 Guard([&] { AgentClient::Instance().Command(L"reconnect", profiles[selected].id); });
         });
+        Get<Button>(L"BrowseLogs").Click([this](auto &&, auto &&) { History(); });
         Get<Button>(L"OpenLog").Click([this](auto &&, auto &&) {
             Windows::ApplicationModel::DataTransfer::DataPackage package;
-            package.SetText(lastLogs);
+            std::wstring text;
+            if (selected >= 0)
+                for (auto const &entry : Connection(profiles[selected].id).entries)
+                    text += LogTime(entry.time) + L"  " + profiles[selected].name + L"  " + entry.level + L"  " + entry.message + L"\n";
+            package.SetText(text);
             Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
         });
         Get<Button>(L"Settings").Click([this](auto &&, auto &&) { Settings(); });
@@ -221,15 +263,15 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             lastLogs.clear();
             Refresh();
         });
+        AnimateSettings(Get<Button>(L"Settings"), Get<AnimatedIcon>(L"SettingsIcon"));
+        mainReady = true;
         Rebuild();
-        if (popupOnly)
-            ShowPopup();
-        else
-            Show();
     }
     fire_and_forget ShowError(std::wstring text)
     {
         auto lifetime = get_strong();
+        DialogScope modal(dialogBusy);
+        if (!modal) co_return;
         try
         {
             ContentDialog dialog;
@@ -245,7 +287,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         }
         catch (...)
         {
-            MessageBoxW(hwnd, text.c_str(), L"Connecty", MB_ICONERROR);
+            std::ofstream out(DataPath() / L"ui-error.log", std::ios::trunc);
+            out << to_string(text).substr(0, 4096) << '\n';
         }
     }
     Snapshot Connection(std::wstring const &id)
@@ -263,13 +306,22 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             return found->second;
         return {};
     }
+    void AnimateSettings(Button const &button, AnimatedIcon const &icon)
+    {
+        AnimatedIcon::SetState(icon, L"Normal");
+        button.PointerEntered([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"PointerOver"); });
+        button.PointerExited([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"Normal"); });
+        button.GotFocus([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"PointerOver"); });
+        button.LostFocus([icon](auto &&, auto &&) { AnimatedIcon::SetState(icon, L"Normal"); });
+    }
     void ToggleRail()
     {
         railOpen = !railOpen;
         Get<ColumnDefinition>(L"RailWidth").Width({railOpen ? 208.0 : 48.0, GridUnitType::Pixel});
         Get<Grid>(L"Rail").Padding(railOpen ? Thickness{10, 12, 10, 12} : Thickness{0, 12, 0, 12});
         Get<Grid>(L"RailHeader").Margin(railOpen ? Thickness{12, 0, 2, 12} : Thickness{0, 0, 0, 12});
-        Get<StackPanel>(L"RailFooter").Margin(railOpen ? Thickness{10, 12, 4, 0} : Thickness{0, 12, 0, 0});
+        Get<StackPanel>(L"RailFooter").Margin(railOpen ? Thickness{0, 12, 0, 0} : Thickness{0, 12, 0, 0});
+        Get<Button>(L"Settings").Padding(railOpen ? Thickness{8, 8, 8, 8} : Thickness{0, 8, 0, 8});
         Get<Button>(L"Settings")
             .HorizontalContentAlignment(railOpen ? HorizontalAlignment::Left : HorizontalAlignment::Center);
         for (auto const &value : Get<ListView>(L"Profiles").Items())
@@ -282,7 +334,6 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         }
         auto visibility = railOpen ? Visibility::Visible : Visibility::Collapsed;
         Get<TextBlock>(L"RailHeading").Visibility(visibility);
-        Get<TextBlock>(L"Summary").Visibility(visibility);
         Get<TextBlock>(L"SettingsText").Visibility(visibility);
         Get<Button>(L"Add").HorizontalAlignment(railOpen ? HorizontalAlignment::Right
                                                          : HorizontalAlignment::Center);
@@ -352,22 +403,22 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                     break;
                 }
         profiles = view.profiles;
-        if (changed)
-            Rebuild();
-        else
-            Refresh();
+        if (mainReady)
+        {
+            if (changed)
+                Rebuild();
+            else
+                Refresh();
+        }
         if (popup && IsWindowVisible(popupHwnd))
             PopupRows();
     }
     void Refresh()
     {
         auto view = AgentClient::Instance().Read();
-        unsigned connected = 0;
         for (size_t i = 0; i < profiles.size(); ++i)
         {
             auto s = Connection(profiles[i].id);
-            if (s.state == State::Forwarding || s.state == State::Verified)
-                ++connected;
             if (i < rowStates.size())
             {
                 rowStates[i].Text(StateText(s.state));
@@ -377,8 +428,6 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                 ToolTipService::SetToolTip(item, box_value(profiles[i].name + L"\n" + StateText(s.state)));
             }
         }
-        Get<TextBlock>(L"Summary")
-            .Text(view.online ? std::to_wstring(connected) + L" connected" : L"Agent offline");
         Get<Grid>(L"Empty").Visibility(selected < 0 ? Visibility::Visible : Visibility::Collapsed);
         Get<Grid>(L"Details").Visibility(selected < 0 ? Visibility::Collapsed : Visibility::Visible);
         if (selected < 0 || selected >= int(profiles.size()))
@@ -421,7 +470,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         connect.Style(Active(s.state) ? Style{nullptr}
                                       : Resources().Lookup(box_value(L"AccentButtonStyle")).as<Style>());
         Get<TextBlock>(L"ConnectText").Text(Active(s.state) ? L"Disconnect" : L"Connect");
-        Get<FontIcon>(L"ConnectIcon").Glyph(Active(s.state) ? L"\xE7E8" : L"\xE703");
+        Get<FontIcon>(L"ConnectIcon").Visibility(Active(s.state) ? Visibility::Visible : Visibility::Collapsed);
+        Get<FrameworkElement>(L"ConnectPlug").Visibility(Active(s.state) ? Visibility::Collapsed : Visibility::Visible);
         Automation::AutomationProperties::SetName(connect, Active(s.state) ? L"Disconnect" : L"Connect");
         Get<Button>(L"Reconnect").IsEnabled(Active(s.state) && view.online);
         Get<TextBlock>(L"NoLogs").Visibility(s.entries.empty() ? Visibility::Visible : Visibility::Collapsed);
@@ -436,13 +486,15 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                 Grid row;
                 row.Padding({0, 2, 0, 2});
                 ColumnDefinition time;
-                time.Width(GridLength{50, GridUnitType::Pixel});
+                time.Width(GridLength{68, GridUnitType::Pixel});
                 row.ColumnDefinitions().Append(time);
                 ColumnDefinition message;
                 message.Width(GridLength{1, GridUnitType::Star});
                 row.ColumnDefinitions().Append(message);
                 TextBlock stamp;
-                stamp.Text(Clock(it->time));
+                auto fullTime = LogTime(it->time);
+                stamp.Text(fullTime.substr(11));
+                ToolTipService::SetToolTip(stamp, box_value(fullTime));
                 stamp.FontSize(11);
                 stamp.Opacity(.5);
                 row.Children().Append(stamp);
@@ -470,6 +522,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         Windows::Data::Json::JsonObject extra;
         if (state.errorCode == L"key_locked")
         {
+            DialogScope modal(dialogBusy);
+            if (!modal) co_return;
             ContentDialog dialog;
             dialog.XamlRoot(mainVisible ? root.XamlRoot() : popupRoot.XamlRoot());
             dialog.Title(box_value(L"Unlock private key"));
@@ -491,6 +545,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     fire_and_forget Edit(bool existing)
     {
         auto lifetime = get_strong();
+        DialogScope modal(dialogBusy);
+        if (!modal) co_return;
         int index = existing ? selected : -1;
         if (existing && index < 0)
             co_return;
@@ -557,7 +613,9 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             else
                 args.Cancel(false);
         });
-        if (co_await dialog.ShowAsync() != ContentDialogResult::Primary)
+        auto result = co_await dialog.ShowAsync();
+        modal.Release();
+        if (result != ContentDialogResult::Primary)
             co_return;
         Guard([&] {
             auto next = profiles;
@@ -575,6 +633,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     fire_and_forget Delete()
     {
         auto lifetime = get_strong();
+        DialogScope modal(dialogBusy);
+        if (!modal) co_return;
         int index = selected;
         if (index < 0)
             co_return;
@@ -583,7 +643,9 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
         dialog.Title(box_value(L"Remove " + profiles[index].name + L"?"));
         dialog.PrimaryButtonText(L"Remove");
         dialog.CloseButtonText(L"Cancel");
-        if (co_await dialog.ShowAsync() == ContentDialogResult::Primary)
+        auto result = co_await dialog.ShowAsync();
+        modal.Release();
+        if (result == ContentDialogResult::Primary)
             Guard([&] {
                 auto next = profiles;
                 next.erase(next.begin() + index);
@@ -593,30 +655,129 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                 Rebuild();
             });
     }
+    fire_and_forget History()
+    {
+        auto lifetime = get_strong();
+        DialogScope modal(dialogBusy);
+        if (!modal) co_return;
+        try
+        {
+            auto response = co_await RequestAsync(L"history");
+            auto data = response.GetNamedObject(L"data");
+            auto records = data.GetNamedArray(L"records");
+            auto panel = Markup::XamlReader::Load(LR"xaml(
+<StackPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Spacing="12" MinWidth="480">
+ <TextBox x:Name="Search" PlaceholderText="Search activity" AutomationProperties.Name="Search activity"/>
+ <CheckBox x:Name="All" Content="All connections"/>
+ <ListView x:Name="Rows" Height="280" SelectionMode="None" Background="Transparent" BorderThickness="0" Padding="0" AutomationProperties.Name="Connection history"/>
+ <TextBlock x:Name="Note" Visibility="Collapsed" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+</StackPanel>)xaml").as<StackPanel>();
+            auto search = panel.FindName(L"Search").as<TextBox>();
+            auto all = panel.FindName(L"All").as<CheckBox>();
+            auto rows = panel.FindName(L"Rows").as<ListView>();
+            auto note = panel.FindName(L"Note").as<TextBlock>();
+            std::wstring id = selected >= 0 ? profiles[selected].id : L"";
+            all.IsChecked(box_value(id.empty()).as<Windows::Foundation::IReference<bool>>());
+            auto exported = std::make_shared<std::wstring>();
+            auto render = [records, id, exported, ws=make_weak(search), wa=make_weak(all), wr=make_weak(rows)] {
+                auto search = ws.get(); auto all = wa.get(); auto rows = wr.get();
+                if (!search || !all || !rows) return;
+                std::wstring query = search.Text().c_str();
+                std::transform(query.begin(), query.end(), query.begin(), [](wchar_t c){ return std::towlower(c); });
+                rows.Items().Clear(); exported->clear();
+                for (int i = int(records.Size()) - 1; i >= 0; --i)
+                {
+                    auto record = records.GetAt(uint32_t(i)).GetObject();
+                    if (!all.IsChecked().Value() && record.GetNamedString(L"profileId") != id) continue;
+                    std::wstring profile = record.GetNamedString(L"profile").c_str();
+                    std::wstring message = record.GetNamedString(L"message").c_str();
+                    std::wstring level = record.GetNamedString(L"level").c_str();
+                    std::wstring text = profile + L" " + message + L" " + level + L" " + record.GetNamedString(L"code").c_str();
+                    std::transform(text.begin(), text.end(), text.begin(), [](wchar_t c){ return std::towlower(c); });
+                    if (text.find(query) == std::wstring::npos) continue;
+                    auto stamp = LogTime(uint64_t(record.GetNamedNumber(L"time")));
+                    *exported += stamp + L"  " + profile + L"  " + level + L"  " + message + L"\n";
+                    StackPanel row; row.Spacing(4); row.Padding({0,6,0,6});
+                    TextBlock header; header.Text(stamp + L"    " + profile); header.FontSize(11); header.Opacity(.65);
+                    TextBlock body; body.Text(message); body.FontSize(12); body.TextWrapping(TextWrapping::Wrap); body.IsTextSelectionEnabled(true);
+                    if (level == L"error") body.Foreground(StateBrush(State::Error));
+                    row.Children().Append(header); row.Children().Append(body); rows.Items().Append(row);
+                }
+                if (!rows.Items().Size()) { TextBlock empty; empty.Text(L"No matching activity."); rows.Items().Append(empty); }
+            };
+            search.TextChanged([render](auto &&, auto &&){ render(); });
+            all.Checked([render](auto &&, auto &&){ render(); });
+            all.Unchecked([render](auto &&, auto &&){ render(); });
+            render();
+            std::wstring info;
+            auto error = data.GetNamedValue(L"error", Windows::Data::Json::JsonValue::CreateNullValue());
+            if (error.ValueType() == Windows::Data::Json::JsonValueType::String) info += L"\n" + std::wstring(error.GetString());
+            if (data.GetNamedNumber(L"dropped", 0) > 0) info += L"\nSome events were dropped.";
+            note.Text(info);
+            note.Visibility(info.empty() ? Visibility::Collapsed : Visibility::Visible);
+            ContentDialog dialog; dialog.XamlRoot(root.XamlRoot()); dialog.Title(box_value(L"Connection history"));
+            dialog.Content(panel); dialog.PrimaryButtonText(L"Copy"); dialog.CloseButtonText(L"Close");
+            if (co_await dialog.ShowAsync() == ContentDialogResult::Primary)
+            {
+                Windows::ApplicationModel::DataTransfer::DataPackage package; package.SetText(*exported);
+                Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+            }
+        }
+        catch (...) { modal.Release(); ShowError(ErrorMessage()); }
+    }
     fire_and_forget Settings()
     {
         auto lifetime = get_strong();
-        auto panel = Markup::XamlReader::Load(LR"(
-<StackPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Spacing="20" MinWidth="360">
- <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="16"><StackPanel Spacing="8"><ToggleSwitch x:Name="Startup" Header="Run at sign-in"/><TextBlock Text="Keep your tunnels running in the background." FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel></Border>
- <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="40" Height="40"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="Connecty 0.3" FontSize="13" FontWeight="SemiBold"/><TextBlock Text="By Chromatic" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel></StackPanel>
-</StackPanel>)")
-                         .as<StackPanel>();
-        Logo(panel.FindName(L"SettingsLogo").as<Image>());
-        auto startup = panel.FindName(L"Startup").as<ToggleSwitch>();
-        startup.IsOn(StartupEnabled());
-        ContentDialog dialog;
-        dialog.XamlRoot(root.XamlRoot());
-        dialog.Title(box_value(L"Settings"));
-        dialog.Content(panel);
-        dialog.PrimaryButtonText(L"Save");
-        dialog.CloseButtonText(L"Close");
-        dialog.DefaultButton(ContentDialogButton::Primary);
-        if (co_await dialog.ShowAsync() == ContentDialogResult::Primary)
-            Guard([&] { SetStartup(startup.IsOn()); });
+        DialogScope modal(dialogBusy);
+        if (!modal) co_return;
+        try
+        {
+            auto response = co_await RequestAsync(L"log_options");
+            auto options = response.GetNamedObject(L"data").GetNamedObject(L"settings");
+            auto panel = Markup::XamlReader::Load(LR"xaml(
+<ScrollViewer xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" MaxHeight="350"><StackPanel Spacing="16" MinWidth="380" Padding="0,0,8,0">
+ <InfoBar x:Name="LoggingError" IsOpen="False" IsClosable="False" Severity="Error"/><ToggleSwitch x:Name="Startup" Header="Run at sign-in"/>
+ <ToggleSwitch x:Name="SaveLogs" Header="Save connection history"/>
+ <TextBox x:Name="LogFolder" Header="Log folder"/>
+ <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><NumberBox x:Name="LogDays" Header="Keep for (days)" Minimum="1" Maximum="30" SpinButtonPlacementMode="Compact"/><NumberBox x:Name="LogSize" Grid.Column="1" Header="File limit (MiB)" Minimum="1" Maximum="16" SpinButtonPlacementMode="Compact"/></Grid>
+ <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="36" Height="36"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="Connecty 0.3.1" FontSize="13" FontWeight="SemiBold"/><TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"><Run Text="By "/><Hyperlink NavigateUri="https://chromatic.hu">Chromatic</Hyperlink></TextBlock></StackPanel></StackPanel>
+</StackPanel></ScrollViewer>)xaml").as<ScrollViewer>();
+            Logo(panel.FindName(L"SettingsLogo").as<Image>());
+            auto startup = panel.FindName(L"Startup").as<ToggleSwitch>(); startup.IsOn(StartupEnabled());
+            auto save = panel.FindName(L"SaveLogs").as<ToggleSwitch>(); save.IsOn(options.GetNamedBoolean(L"enabled"));
+            auto folder = panel.FindName(L"LogFolder").as<TextBox>(); folder.Text(options.GetNamedString(L"directory"));
+            auto days = panel.FindName(L"LogDays").as<NumberBox>(); days.Value(options.GetNamedNumber(L"keepDays"));
+            auto size = panel.FindName(L"LogSize").as<NumberBox>(); size.Value(options.GetNamedNumber(L"maxMib"));
+            auto feedback = panel.FindName(L"LoggingError").as<InfoBar>();
+            ContentDialog dialog; dialog.XamlRoot(root.XamlRoot()); dialog.Title(box_value(L"Settings")); dialog.Content(panel);
+            dialog.PrimaryButtonText(L"Save"); dialog.CloseButtonText(L"Close"); dialog.DefaultButton(ContentDialogButton::Primary);
+            dialog.PrimaryButtonClick([this, startup, save, folder, days, size, feedback](ContentDialog, ContentDialogButtonClickEventArgs args) -> fire_and_forget {
+                auto deferral = args.GetDeferral();
+                args.Cancel(true);
+                try
+                {
+                    using namespace Windows::Data::Json;
+                    if (!std::isfinite(days.Value()) || !std::isfinite(size.Value())) throw std::runtime_error("Enter a retention period and file size");
+                    JsonObject settings;
+                    settings.SetNamedValue(L"enabled", JsonValue::CreateBooleanValue(save.IsOn()));
+                    settings.SetNamedValue(L"directory", JsonValue::CreateStringValue(folder.Text()));
+                    settings.SetNamedValue(L"keepDays", JsonValue::CreateNumberValue(std::floor(days.Value())));
+                    settings.SetNamedValue(L"maxMib", JsonValue::CreateNumberValue(std::floor(size.Value())));
+                    JsonObject extra; extra.SetNamedValue(L"settings", settings);
+                    co_await RequestAsync(L"logging", L"", extra);
+                    if (startup.IsOn() != StartupEnabled()) { JsonObject command; command.SetNamedValue(L"enabled", JsonValue::CreateBooleanValue(startup.IsOn())); co_await RequestAsync(L"startup", L"", command); }
+                    args.Cancel(false);
+                }
+                catch (...) { feedback.Message(ErrorMessage()); feedback.IsOpen(true); }
+                deferral.Complete();
+            });
+            co_await dialog.ShowAsync();
+        }
+        catch (...) { modal.Release(); ShowError(ErrorMessage()); }
     }
     void Show()
     {
+        EnsureMain();
         mainVisible = true;
         popupOnly = false;
         if (popup)
@@ -653,7 +814,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
  <Grid ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
   <FontIcon x:Name="Icon" FontSize="19"/>
   <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center"><TextBlock x:Name="Name" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="State" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
-  <Button x:Name="Toggle" Grid.Column="2" Style="{ThemeResource SubtleButtonStyle}" Width="36" Height="36" Padding="8" VerticalAlignment="Center"><FontIcon x:Name="ActionIcon" FontSize="15"/></Button>
+  <Button x:Name="Toggle" Grid.Column="2" Style="{ThemeResource SubtleButtonStyle}" Width="36" Height="36" Padding="8" VerticalAlignment="Center"><Grid Width="16" Height="16"><FontIcon x:Name="ActionIcon" Glyph="&#xE7E8;" FontSize="15"/><Path x:Name="ActionPlug" Stroke="{ThemeResource AccentTextFillColorPrimaryBrush}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M5,1 L5,5 M11,1 L11,5 M3,5 L13,5 L13,8 C13,11 11,13 8,13 C5,13 3,11 3,8 Z M8,13 L8,16"/></Grid></Button>
  </Grid>
 </Border>)")
                            .as<Border>();
@@ -666,7 +827,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             statusIcon.Glyph(StateGlyph(s.state));
             statusIcon.Foreground(StateBrush(s.state));
             auto toggle = row.FindName(L"Toggle").as<Button>();
-            row.FindName(L"ActionIcon").as<FontIcon>().Glyph(Active(s.state) ? L"\xE7E8" : L"\xE703");
+            row.FindName(L"ActionIcon").as<FontIcon>().Visibility(Active(s.state) ? Visibility::Visible : Visibility::Collapsed);
+            row.FindName(L"ActionPlug").as<FrameworkElement>().Visibility(Active(s.state) ? Visibility::Collapsed : Visibility::Visible);
             auto action = (Active(s.state) ? L"Disconnect " : L"Connect ") + p.name;
             Automation::AutomationProperties::SetName(toggle, action);
             ToolTipService::SetToolTip(toggle, box_value(action));
@@ -730,6 +892,8 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
                 }
             });
             Logo(popupRoot.FindName(L"PopupLogo").as<Image>());
+            AnimateSettings(popupRoot.FindName(L"PopupSettings").as<Button>(),
+                            popupRoot.FindName(L"SettingsIcon").as<AnimatedIcon>());
             popupRoot.FindName(L"PopupOpen").as<Button>().Click([this](auto &&, auto &&) { Show(); });
             popupRoot.FindName(L"PopupSettings").as<Button>().Click([this](auto &&, auto &&) {
                 Show();

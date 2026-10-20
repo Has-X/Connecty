@@ -84,7 +84,7 @@ if($Test){
 if($Package){
   $dist=Join-Path $root 'dist/Connecty-x64'
   New-Item -ItemType Directory -Force $dist | Out-Null
-  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico' | ForEach-Object {
+  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-tray.ico','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico' | ForEach-Object {
     $source=Join-Path $build $_
     $destination=Join-Path $dist $_
     if(!(Test-Path $destination) -or (Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $destination).Hash){
@@ -97,7 +97,7 @@ if($Package){
   # Release from a fresh allow-listed staging folder, never from a user's portable folder.
   $stage=Join-Path $root ("build/package-"+[guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path $stage | Out-Null
-  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico','README.md','LICENSE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {
+  'Connecty.exe','Connecty.Agent.exe','Microsoft.WindowsAppRuntime.Bootstrap.dll','Connecty.ico','Connecty.png','Connecty-tray.ico','Connecty-live.ico','Connecty-retry.ico','Connecty-error.ico','README.md','LICENSE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {
     Copy-Item -LiteralPath (Join-Path $dist $_) -Destination $stage
   }
   Copy-Item -LiteralPath "$root/docs" -Destination $stage -Recurse

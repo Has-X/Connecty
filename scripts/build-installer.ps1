@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Compiler, [string]$Version='0.3.0')
+param([string]$Compiler, [string]$Version='0.3.1')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
 if(!$Compiler){$Compiler=Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 7/ISCC.exe'}

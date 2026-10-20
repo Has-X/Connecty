@@ -144,6 +144,28 @@ async fn dispatch(
     commands: &mpsc::Sender<Command>,
     store: &Store,
 ) -> io::Result<(Value, bool)> {
+    if let Ok(value) = serde_json::from_slice::<Value>(bytes)
+        && value["version"] == 1
+        && matches!(
+            value["op"].as_str(),
+            Some("history" | "logging" | "log_options")
+        )
+    {
+        let id = value["requestId"].as_u64().unwrap_or(0);
+        let result = match store.journal.get() {
+            Some(journal) => timeout(Duration::from_secs(10), journal.request(value))
+                .await
+                .unwrap_or_else(|_| Err(AgentError::new("logging", "Log worker timed out", true))),
+            None => Err(AgentError::config("Log worker unavailable")),
+        };
+        return Ok((
+            match result {
+                Ok(data) => json!({"event":"reply","requestId":id,"ok":true,"data":data}),
+                Err(error) => json!({"event":"reply","requestId":id,"ok":false,"error":error}),
+            },
+            false,
+        ));
+    }
     let parsed: Result<Request, _> = serde_json::from_slice(bytes);
     let mut is_shutdown = false;
     let (request_id, result) = match parsed {

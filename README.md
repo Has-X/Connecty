@@ -23,7 +23,9 @@ No browser, .NET runtime or OpenSSH client is bundled.
 2. Choose reverse or local forwarding and set the listening and destination ports.
 3. Connect. Turn on **Run at sign-in** in Settings for unattended operation.
 
-Closing the window keeps your tunnels running. Use the tray for quick controls.
+Closing the window exits the UI and keeps your tunnels running in the agent.
+Use the tray for quick controls. Reopening it loads WinUI on demand; the main
+screen is built only when opened.
 Each profile's **Connect on start** switch selects the tunnels started by the agent.
 The optional return-path check reports whether your own verification command
 succeeded; it is separate from SSH connectivity.
@@ -83,8 +85,18 @@ not automatically imported or disabled.
 Profiles remain at `%LOCALAPPDATA%\Connecty\profiles.json`. Existing profiles
 are read with compatible defaults, backed up once to `profiles.pre-agent.json`,
 and replaced atomically on edits. Invalid saved data is reported and never
-silently overwritten. Activity stays in memory. A bounded startup error file
-and UI error file aid diagnosis. Do not publish machine-specific data or keys.
+silently overwritten. Recent activity is bounded in memory. Connection history
+is saved locally by default in `Logs` beneath the profile directory, with two
+rotating files of up to 2 MiB each and a seven-day age limit. Settings can disable
+recording, change the folder, or adjust retention and file size. Cleanup runs
+when logs are written or browsed, with no idle polling. Changing folders leaves
+old files intact. The in-app History view searches the latest 256 retained records.
+Records include profile, timestamp, SSH account, peer address, stream lifetime
+and byte counts; no forwarded content, passwords or private keys are recorded.
+Peer addresses come from the SSH server for reverse streams. End-user sign-ins
+are recorded by the destination service, not inferred by Connecty. A bounded
+startup error file and UI error file aid diagnosis. Do not publish machine-specific
+data or keys.
 
 Startup uses a per-user Task Scheduler logon task at limited privilege, without
 password storage or elevation. It has no execution-time cap, permits battery
