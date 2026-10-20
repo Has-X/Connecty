@@ -1,0 +1,11 @@
+/build/
+/dist/
+/agent/target/
+/controlly-logo
+/.vs/
+*.user
+*.log
+*.dmp
+profiles.json
+settings.json
+/installer/runtime.iss

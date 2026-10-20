@@ -1,0 +1,44 @@
+name: Native Windows build
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Build, test, and package
+        shell: pwsh
+        run: ./scripts/build.ps1 -Test -Package
+      - name: Rust lint
+        run: cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Rust formatting
+        run: cargo fmt --manifest-path agent/Cargo.toml -- --check
+      - name: Agent crash and storage integration
+        run: python scripts/test-supervisor.py --agent build/native/Connecty.Agent.exe --data build/ci-agent-test
+      - name: Dependency advisory check
+        shell: pwsh
+        run: |
+          cargo install cargo-audit --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo audit --file agent/Cargo.lock
+      - name: Inno Setup 7
+        shell: pwsh
+        run: ./scripts/prepare-inno.ps1
+      - name: Build installer and WinGet metadata
+        shell: pwsh
+        run: |
+          ./scripts/build-installer.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/make-winget.ps1
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: Connecty-x64
+          path: |
+            dist/Connecty-x64.zip
+            dist/Connecty-Setup-x64.exe
+            dist/SHA256SUMS.txt
+            packaging/winget/
