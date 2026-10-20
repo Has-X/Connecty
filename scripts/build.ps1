@@ -6,6 +6,7 @@ if($Test -and $Architecture -ne $hostArch){throw 'Run target tests on a Windows 
 $triple=if($Architecture -eq 'arm64'){'aarch64-pc-windows-msvc'}else{'x86_64-pc-windows-msvc'}
 
 $root=Split-Path $PSScriptRoot
+$version=& "$PSScriptRoot/version.ps1"
 Push-Location $root
 try {
 $deps=Join-Path $root 'build/deps'
@@ -59,6 +60,9 @@ if(!$vs){throw 'Install Visual Studio 2022 C++ desktop tools.'}
 $ninja=Join-Path $vs 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja'
 $env:PATH="$ninja;$env:PATH"
 $build=Join-Path $root $(if($Architecture -eq 'x64'){'build/native'}else{'build/native-arm64'})
+# Refresh only workspace package metadata after a version edit; dependencies stay locked.
+& cargo update --manifest-path "$root/agent/Cargo.toml" --workspace --offline
+if($LASTEXITCODE){throw 'Cargo lockfile version synchronization failed'}
 & cargo build --manifest-path "$root/agent/Cargo.toml" --release --locked --target $triple
 if($LASTEXITCODE){throw 'Rust agent build failed'}
 New-Item -ItemType Directory -Force $build | Out-Null
@@ -96,6 +100,7 @@ if($Package){
     }
   }
   'README.md','LICENSE','NOTICE','THIRD-PARTY-NOTICES.md','THIRD-PARTY-LICENSES.txt' | ForEach-Object {Copy-Item -LiteralPath "$root/$_" -Destination $dist -Force}
+  (Get-Content -LiteralPath "$root/NOTICE" -Raw).Replace('/tree/main', "/tree/v$version") | Set-Content -LiteralPath "$dist/NOTICE"
   (Get-Content -LiteralPath "$root/README.md" -Raw).Replace('assets/Connecty.png','Connecty.png').Replace('assets/showcase.png','https://raw.githubusercontent.com/Has-X/Connecty/main/assets/showcase.png').Replace('connecty-github.png','https://raw.githubusercontent.com/Has-X/Connecty/main/connecty-github.png').Replace('installer/assets/preview-dark.png','https://raw.githubusercontent.com/Has-X/Connecty/main/installer/assets/preview-dark.png') | Set-Content -LiteralPath "$dist/README.md"
   Copy-Item -LiteralPath "$root/docs" -Destination $dist -Recurse -Force
   # Release from a fresh allow-listed staging folder, never from a user's portable folder.

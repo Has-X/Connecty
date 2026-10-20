@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Core.h"
 #include "UI.h"
+#include "ConnectyVersion.h"
 #include <MddBootstrap.h>
 #include <microsoft.ui.xaml.window.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
@@ -796,9 +797,10 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
  <ToggleSwitch x:Name="SaveLogs" Header="Save connection history"/>
  <TextBox x:Name="LogFolder" Header="Log folder"/>
  <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><NumberBox x:Name="LogDays" Header="Keep for (days)" Minimum="1" Maximum="30" SpinButtonPlacementMode="Compact"/><NumberBox x:Name="LogSize" Grid.Column="1" Header="File limit (MiB)" Minimum="1" Maximum="16" SpinButtonPlacementMode="Compact"/></Grid>
- <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="36" Height="36"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="Connecty 0.3.2" FontSize="13" FontWeight="SemiBold"/><TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"><Run Text="By "/><Hyperlink NavigateUri="https://chromatic.hu">Chromatic</Hyperlink></TextBlock></StackPanel></StackPanel>
+ <StackPanel Orientation="Horizontal" Spacing="12"><Image x:Name="SettingsLogo" Width="36" Height="36"/><StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock x:Name="SettingsVersion" FontSize="13" FontWeight="SemiBold"/><TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"><Run Text="By "/><Hyperlink NavigateUri="https://chromatic.hu">Chromatic</Hyperlink></TextBlock></StackPanel></StackPanel>
 </StackPanel></ScrollViewer>)xaml").as<ScrollViewer>();
             Logo(panel.FindName(L"SettingsLogo").as<Image>());
+            panel.FindName(L"SettingsVersion").as<TextBlock>().Text(L"Connecty " CONNECTY_VERSION_W);
             auto startup = panel.FindName(L"Startup").as<ToggleSwitch>(); startup.IsOn(StartupEnabled());
             auto save = panel.FindName(L"SaveLogs").as<ToggleSwitch>(); save.IsOn(options.GetNamedBoolean(L"enabled"));
             auto folder = panel.FindName(L"LogFolder").as<TextBox>(); folder.Text(options.GetNamedString(L"directory"));

@@ -1,8 +1,9 @@
 #include <windows.h>
+#include "ConnectyVersion.h"
 101 ICON "Connecty.ico"
 1 VERSIONINFO
-FILEVERSION 0,3,2,0
-PRODUCTVERSION 0,3,2,0
+FILEVERSION CONNECTY_VERSION_NUMERIC
+PRODUCTVERSION CONNECTY_VERSION_NUMERIC
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -13,9 +14,9 @@ BEGIN
    VALUE "CompanyName", "Chromatic\0"
    VALUE "LegalCopyright", "Copyright (c) 2026 Chromatic\0"
    VALUE "FileDescription", "Connecty\0"
-   VALUE "FileVersion", "0.3.2\0"
+   VALUE "FileVersion", CONNECTY_VERSION "\0"
    VALUE "ProductName", "Connecty\0"
-   VALUE "ProductVersion", "0.3.2\0"
+   VALUE "ProductVersion", CONNECTY_VERSION "\0"
   END
  END
  BLOCK "VarFileInfo"

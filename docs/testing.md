@@ -5,6 +5,10 @@ migration/validation, atomic replacement, alias parsing, host-key rejection,
 log bounds, framing/deadlines, backoff and frontend helpers. Run Clippy with
 warnings denied before release.
 
+Run `scripts/test-version.ps1 -Architecture x64` after building (use `arm64` on
+that architecture). It checks future-version parsing, generated Windows metadata,
+automatic CMake regeneration, lockfile preservation and stale-package rejection.
+
 The separate process-recovery test uses a fresh empty data directory and kills
 only its authenticated, isolated child agent:
 

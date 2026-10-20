@@ -1,7 +1,10 @@
 [CmdletBinding()]
-param([string]$Compiler, [string]$Version='0.3.2', [ValidateSet('x64','arm64')][string]$Architecture='x64')
+param([string]$Compiler, [string]$Version, [ValidateSet('x64','arm64')][string]$Architecture='x64')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
+$releaseVersion=& "$PSScriptRoot/version.ps1"
+if($Version -and $Version -ne $releaseVersion){throw 'Change the release version in agent/Cargo.toml, then rebuild.'}
+$Version=$releaseVersion
 if(!$Compiler){$Compiler=Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 7/ISCC.exe'}
 if(!(Test-Path -LiteralPath $Compiler)){
   $Compiler=Join-Path ${env:ProgramFiles} 'Inno Setup 7/ISCC.exe'
@@ -16,6 +19,7 @@ $runtime=(Get-Content -LiteralPath "$root/packaging/runtime.json" -Raw | Convert
 "@ | Set-Content -LiteralPath "$root/installer/runtime.iss"
 $payload=(Get-Content -LiteralPath "$root/build/package-stage-$Architecture.txt" -Raw).Trim()
 if(!$payload.StartsWith((Join-Path $root 'build/package-'),[StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected installer staging path'}
+$null=& "$PSScriptRoot/version.ps1" -Binary @("$payload/Connecty.exe", "$payload/Connecty.Agent.exe")
 & $Compiler --quiet "/DAppVersion=$Version" "/DAppArch=$Architecture" "/DPayload=$payload" "/DOutputDir=$root/dist" "$root/installer/Connecty.iss"
 if($LASTEXITCODE){throw "Inno Setup failed ($LASTEXITCODE)"}
 Get-Item "$root/dist/Connecty-Setup-$Architecture.exe" | Select-Object Name,Length

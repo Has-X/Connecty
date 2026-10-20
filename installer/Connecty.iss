@@ -7,7 +7,7 @@
   #define AllowedArch "x64os"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.3.2"
+  #error "Build with scripts/build-installer.ps1 to read the release version from agent/Cargo.toml."
 #endif
 #ifndef Payload
   #define Payload "..\dist\Connecty-x64"

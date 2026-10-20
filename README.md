@@ -134,6 +134,13 @@ validation. Requests are versioned, length-framed and bounded. See
 
 ## Build and verify
 
+The release version lives in `[package].version` in `agent/Cargo.toml`. Edit it
+once, then run the normal build: the app's Settings label, executable resources,
+installer, packaged source notice and WinGet metadata derive their version from
+that value. The build refreshes the package's lockfile entry without updating
+dependencies. Commit the resulting `Cargo.lock` too. Rebuild binaries and
+installers before generating WinGet manifests; stale versions are rejected.
+
 Install Rust (MSVC target), Visual Studio 2022 desktop C++ tools, CMake/Ninja,
 and a Windows 11 SDK with C++/WinRT. From PowerShell:
 

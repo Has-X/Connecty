@@ -1,7 +1,11 @@
 [CmdletBinding()]
-param([string]$Version='0.3.2', [ValidateSet('x64','arm64')][string[]]$Architectures=@('x64','arm64'))
+param([string]$Version, [ValidateSet('x64','arm64')][string[]]$Architectures=@('x64','arm64'))
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
+$releaseVersion=& "$PSScriptRoot/version.ps1"
+if($Version -and $Version -ne $releaseVersion){throw 'Change the release version in agent/Cargo.toml, then rebuild.'}
+$Version=$releaseVersion
+$null=& "$PSScriptRoot/version.ps1" -Binary @($Architectures | ForEach-Object { "$root/dist/Connecty-Setup-$_.exe" })
 $manifest=Join-Path $root "packaging/winget/manifests/c/Chromatic/Connecty/$Version"
 New-Item -ItemType Directory -Path $manifest -Force | Out-Null
 $installers=foreach($arch in $Architectures){

@@ -30,6 +30,9 @@ jobs:
         run: cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust formatting
         run: cargo fmt --manifest-path agent/Cargo.toml -- --check
+      - name: Version metadata checks
+        shell: pwsh
+        run: ./scripts/test-version.ps1 -Architecture ${{ matrix.arch }}
       - name: Agent crash and storage integration
         run: python scripts/test-supervisor.py --agent ${{ matrix.native }}/Connecty.Agent.exe --data build/ci-agent-test
       - name: Dependency advisory check
