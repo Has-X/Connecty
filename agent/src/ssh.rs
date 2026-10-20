@@ -254,6 +254,40 @@ async fn connect(
     }
     Ok(session)
 }
+#[derive(Default)]
+struct VerificationStatus {
+    error: Option<AgentError>,
+}
+impl VerificationStatus {
+    fn update(&mut self, publisher: &Publisher, check: Result<(), AgentError>) {
+        match check {
+            Ok(()) => {
+                if self.error.take().is_some() {
+                    publisher.log(
+                        "info",
+                        "verification_recovered",
+                        "Return-path check recovered",
+                    );
+                }
+                publisher.status("verified", "Return path checked", None);
+            }
+            Err(error) => {
+                if self.error.as_ref().is_none_or(|previous| {
+                    previous.code != error.code || previous.message != error.message
+                }) {
+                    publisher.log("warn", &error.code, &error.message);
+                }
+                publisher.status(
+                    "forwarding",
+                    "Return-path check failed",
+                    Some(error.clone()),
+                );
+                self.error = Some(error);
+            }
+        }
+    }
+}
+
 async fn probe(mut channel: Channel<client::Msg>, command: String) -> Result<(), AgentError> {
     timeout(Duration::from_secs(12), async {
         channel.exec(true, command).await.map_err(network)?;
@@ -372,7 +406,7 @@ async fn session(
     let mut verification = JoinSet::new();
     let mut verify = tokio::time::interval(Duration::from_secs(60));
     verify.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut failures = 0;
+    let mut verification_status = VerificationStatus::default();
     let result = interruptible::<()>(cancel, recovery, async {
       loop {
         tokio::select! {
@@ -440,18 +474,10 @@ async fn session(
             },
             Some(check) = verification.join_next(), if !verification.is_empty() => {
                 let check = check.unwrap_or_else(|_| Err(network("Verification worker stopped")));
-                match check {
-                    Ok(()) => {
-                        failures = 0;
-                        publisher.status("verified", "Return path checked", None);
-                    }
-                    Err(e) => {
-                        failures += 1;
-                        publisher.status("forwarding", "Return-path check failed", Some(e.clone()));
-                        publisher.log("warn", &e.code, &e.message);
-                        if failures >= 2 { break Err(e); }
-                    }
-                }
+                // An optional command can fail independently of the SSH transport
+                // (destination authentication, permissions or a slow service).
+                // Keep active streams; keepalives detect a genuinely stale session.
+                verification_status.update(publisher, check);
             }
         }
       }
@@ -590,6 +616,59 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn repeated_probe_failures_keep_transport_state_and_recover_without_retries() {
+        let mut snapshot = crate::model::Snapshot::default();
+        let mut connection = crate::model::ConnectionState::default();
+        connection.set("verified", "Return path checked", None);
+        connection.verified_at = Some(crate::model::now());
+        snapshot.connections.insert("test".into(), connection);
+        let store = crate::state::Store::new(snapshot);
+        let publisher = Publisher {
+            store: store.clone(),
+            id: "test".into(),
+            generation: 0,
+        };
+        let since = store.read().connections["test"].since;
+        let mut status = VerificationStatus::default();
+        for _ in 0..10 {
+            status.update(
+                &publisher,
+                Err(AgentError::new(
+                    "verification_failed",
+                    "Probe returned exit code 1",
+                    true,
+                )),
+            );
+        }
+        let snapshot = store.read();
+        let failed = &snapshot.connections["test"];
+        assert_eq!(failed.state, "forwarding");
+        assert_eq!(failed.since, since);
+        assert_eq!(failed.retries, 0);
+        assert!(failed.verified_at.is_none());
+        assert_eq!(failed.error.as_ref().unwrap().code, "verification_failed");
+        assert_eq!(failed.logs.len(), 1);
+        status.update(
+            &publisher,
+            Err(AgentError::new(
+                "verification_timeout",
+                "Probe timed out",
+                true,
+            )),
+        );
+        status.update(&publisher, Ok(()));
+        status.update(&publisher, Ok(()));
+        let snapshot = store.read();
+        let recovered = &snapshot.connections["test"];
+        assert_eq!(recovered.state, "verified");
+        assert_eq!(recovered.since, since);
+        assert_eq!(recovered.retries, 0);
+        assert!(recovered.error.is_none() && recovered.verified_at.is_some());
+        assert_eq!(recovered.logs.len(), 3);
+        assert_eq!(recovered.logs[2].code, "verification_recovered");
+    }
+
     #[test]
     fn stream_reset_is_distinct_from_transfer_failure_and_keeps_tunnel_state() {
         let mut snapshot = crate::model::Snapshot::default();

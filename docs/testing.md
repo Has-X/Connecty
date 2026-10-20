@@ -48,6 +48,10 @@ injected power recovery, unknown/changed host keys, silent blackholing, listener
 cleanup and acknowledged shutdown. Results stay in the ignored build directory.
 Expected forced relay resets are not application failures.
 
+The fault suite also runs an always-failing optional command across two probe
+ticks. The SSH transport and listener must remain available without retries,
+and identical verification warnings must not repeat on every tick.
+
 `stream_reset` records an individual forwarded connection reset, with the peer,
 destination and original OS error. It does not change tunnel state. Other transfer
 errors remain warnings. Unit tests also check that recovery and cancellation can

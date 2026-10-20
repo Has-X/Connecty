@@ -165,6 +165,26 @@ async def main(args):
         assert all(after["connections"][key]["retries"] == prior["connections"][key]["retries"]
                    for key in ("reverse", "local"))
         passed("repeated TCP resets are isolated; same agent and SSH sessions remain healthy")
+        # A failed optional command must never recycle an otherwise healthy SSH
+        # transport. Wait across two probe ticks to catch the old restart policy.
+        failing = dict(base, id="probe-failure", name="Probe failure isolation",
+                       direction="local", remotePort=args.local_port+1, probe="false")
+        await ctl("configure", profiles=profiles+[failing])
+        await wait(lambda s: (s["connections"]["probe-failure"]["error"] or {}).get("code")
+                   == "verification_failed")
+        baseline = (await ctl("snapshot"))["connections"]["probe-failure"]
+        for _ in range(2):
+            await asyncio.sleep(31)
+            state = (await ctl("snapshot"))["connections"]["probe-failure"]
+            assert state["state"] == "forwarding" and state["retries"] == 0, state
+            assert state["since"] == baseline["since"], state
+        assert sum(e["code"] == "verification_failed" for e in state["logs"]) == 1, state
+        reader, writer = await asyncio.open_connection("127.0.0.1", args.local_port+1)
+        assert (await asyncio.wait_for(reader.readline(), 8)).startswith(b"SSH-2.0-")
+        writer.close(); await writer.wait_closed()
+        await ctl("configure", profiles=profiles)
+        await healthy(); await banner()
+        passed("repeated optional probe failures preserve SSH transport and listener; duplicate warnings bounded")
         before = relay.accepted
         relay.disconnect()
         await wait(lambda s: any(c["retries"] for c in s["connections"].values()))

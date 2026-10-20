@@ -48,7 +48,10 @@ Use the tray for quick controls. Reopening it loads WinUI on demand; the main
 screen is built only when opened.
 Each profile's **Connect on start** switch selects the tunnels started by the agent.
 The optional return-path check reports whether your own verification command
-succeeded; it is separate from SSH connectivity.
+succeeded; it is separate from SSH connectivity. A failed check reports a warning
+without disconnecting active streams. A check that logs into a forwarded SSH
+service creates a normal stream open/close pair in history on each run; leave
+the optional command empty if SSH keepalives alone are sufficient.
 
 Listeners are loopback-only (`127.0.0.1`, or `::1` in profile JSON). Connect to a
 reverse listener from its SSH server or through a separate authenticated route.

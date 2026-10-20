@@ -36,7 +36,11 @@ be overwritten by delayed updates from an old one. Changing/deleting a profile
 restarts/stops only that profile; unchanged profiles continue. Disconnect does
 not change saved auto-connect preferences for the next agent launch.
 
-Probes run independently: a reverse-route check cannot block the loop that
+Probes run independently: a failed optional command marks verification unhealthy
+without rebuilding a live transport or dropping forwarded streams. Identical
+consecutive failures produce one warning; recovery is recorded once. SSH
+keepalives still detect dead transports and initiate reconnection.
+A reverse-route check cannot block the loop that
 accepts its incoming channels. Network I/O, retry timers, pipe events and native
 recovery events are awaited. Keepalives and optional probes are the only periodic
 connection work. Key decoding, known_hosts reads and configuration writes run on

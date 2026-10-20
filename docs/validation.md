@@ -1,5 +1,21 @@
 # Validation record — 0.3.2
 
+## Post-release transport hardening (2026-10-20)
+
+- Twenty-one Rust tests, Clippy, formatting and the C++ core check passed.
+- Twelve isolated live checks passed. An always-failing optional command ran
+  across two probe ticks without reconnecting SSH or losing its listener;
+  identical warnings were bounded. Actual TCP loss and silent blackholes still
+  triggered transport recovery. Supervisor/storage fault checks also passed.
+- Two authenticated Windows SSH sessions each delivered 180 consecutive
+  heartbeats over approximately three minutes while successful periodic login
+  checks continued. Both completed with exit code zero and no tunnel retries.
+  A successful short login also produced Windows socket reset 10054 on close;
+  that reset alone does not establish a transport failure.
+- Physical sleep and a 24-hour soak were not repeated in this review.
+
+## Released build
+
 Verified locally on 2026-10-20:
 
 - Twenty Rust tests, the C++ core check, formatting and Clippy passed.
