@@ -12,6 +12,13 @@ Verified locally on 2026-10-20:
   warnings and neither stream outcome changes the tunnel state.
 - The installed updated agent reached FOXE through both Prey and Brute, with
   zero transport retries after startup. Physical sleep was not repeated.
+- The 0.3.2 x64 per-user installer upgraded the normal installation without a
+  reboot, preserving profiles and the startup preference. The installed app
+  and Windows installed-apps record both report 0.3.2.
+- Native ARM64 CI passed build, unit checks, XAML startup, lint, supervisor/storage
+  recovery, dependency audit and installer packaging. Both ARM64 executables and
+  the shared-runtime bootstrap have native ARM64 PE headers. The complete x64
+  and ARM64 WinGet manifest set passed local validation.
 
 ## Previous release — 0.3.1
 
