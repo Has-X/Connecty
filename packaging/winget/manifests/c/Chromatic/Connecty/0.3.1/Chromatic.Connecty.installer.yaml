@@ -24,9 +24,9 @@ ElevationRequirement: elevationProhibited
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/Has-X/Connecty/releases/download/v0.3.1/Connecty-Setup-x64.exe
-  InstallerSha256: 21B11FC336FD247C0442AFE6C062112FFF5FC9ABC8A387D79DD77E835A846C8C
+  InstallerSha256: 7DC24157AC1842AB9DD14AC9B8015F979FAA5DF7D6B2F77D62DF4016316899AC
 - Architecture: arm64
   InstallerUrl: https://github.com/Has-X/Connecty/releases/download/v0.3.1/Connecty-Setup-arm64.exe
-  InstallerSha256: 71C987C30EE77D46016188D8BA16E63F2785B8460FF039552E75D7A6766DFE62
+  InstallerSha256: 44CE0B9ADE3D2021DF9C1EB09F0CC1DD0913F3E3021881C14B37D1B67E425EA5
 ManifestType: installer
 ManifestVersion: 1.12.0

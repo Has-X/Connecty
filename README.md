@@ -4,8 +4,15 @@
 
 <h1 align="center"><img src="assets/Connecty.png" alt="Connecty icon" width="40" height="40" align="absmiddle" /> Connecty</h1>
 
-A small, native Windows tunnel manager. The Rust agent keeps SSH connections
-alive; the C++20 / WinUI 3 window opens only when you need it.
+<p align="center">
+  <a href="https://github.com/Has-X/Connecty/actions/workflows/build.yml"><img src="https://github.com/Has-X/Connecty/actions/workflows/build.yml/badge.svg" alt="Native Windows build" /></a>
+  <img src="https://img.shields.io/badge/Windows_11-x64_%7C_ARM64-0078D4" alt="Windows 11 x64 and ARM64" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-444444" alt="AGPL-3.0-or-later" /></a>
+</p>
+
+Connecty keeps reverse and local SSH tunnels running in the background, with a
+compact WinUI 3 and Fluent 2 interface. The independent Rust agent reconnects
+automatically and keeps working when the window is closed.
 
 Developed and published by [Chromatic](https://chromatic.hu).
 
@@ -125,6 +132,8 @@ and a Windows 11 SDK with C++/WinRT. From PowerShell:
 ./scripts/build.ps1 -Test -Package -Architecture x64
 # On an ARM64 Windows machine:
 ./scripts/build.ps1 -Test -Package -Architecture arm64
+# Validate native XAML startup on the matching Windows architecture:
+./scripts/test-ui.ps1 -Architecture x64
 cargo clippy --manifest-path agent/Cargo.toml --locked --all-targets -- -D warnings
 ```
 
@@ -143,6 +152,6 @@ See the [local validation record](docs/validation.md) for completed checks and l
 
 AGPL-3.0-or-later; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Owner-supplied Fluent artwork: `controlly-logo.png`, optimized to
 512px with transparency. `scripts/make-icon.ps1` derives Windows icon
-sizes and tray states. Review the ZIP and third-party licenses before publication.
+sizes and tray states. Releases include source and SHA-256 checksums.
 Releases are currently unsigned. Installer and WinGet details are in
 [installation](docs/installation.md).

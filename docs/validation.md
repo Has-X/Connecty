@@ -26,6 +26,10 @@ Verified locally on 2026-10-20:
   native controls without a window or agent connection. It catches the
   IconSourceElement resource-binding regression; icons use built-in Windows
   FontIcon glyphs without custom paths. This check passed locally on x64.
+- The Windows ARM64 CI runner passed the release build, all 19 unit checks,
+  native XAML startup, lint, formatting, supervisor/storage integration, advisory
+  scan and installer packaging. App, agent and bootstrap PE headers identify
+  ARM64. Physical ARM hardware UI inspection remains untested.
 - The main visual tree is constructed on demand for tray-only launches. No
   numerical cold-start speed claim is made. The built-in animated Settings gear
   uses pointer/focus transitions.
