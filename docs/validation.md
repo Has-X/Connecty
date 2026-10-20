@@ -1,4 +1,21 @@
-# Validation record — 0.3.2
+# Validation record — 0.3.3
+
+## Release checks (2026-10-20)
+
+- Twenty-one Rust tests, C++ core checks, native XAML startup, formatting,
+  Clippy and dependency audit passed locally. Version checks cover regeneration,
+  unchanged dependency pins, invalid versions and stale-package rejection.
+- All twelve isolated live transport/fault checks passed with the 0.3.3 agent,
+  including repeated failed optional probes, forced loss, silent blackholes,
+  injected suspend/resume, strict host-key rejection and graceful cleanup.
+  Supervisor crash recovery and corrupt-storage checks also passed.
+- The x64 per-user installer upgraded the normal installation to 0.3.3 without
+  elevation or reboot. Profiles stayed byte-identical and login startup stayed
+  enabled. The installed scheduled task independently runs the agent; nested
+  logins through both Prey and Brute returned the PC hostname with zero retries.
+- The ARM64 CI artifact contains native ARM64 app, agent and runtime bootstrap.
+  Both architectures' installer manifests passed local WinGet validation.
+- Physical sleep and a 24-hour soak were not repeated for this patch.
 
 ## Post-release transport hardening (2026-10-20)
 
@@ -14,7 +31,7 @@
   that reset alone does not establish a transport failure.
 - Physical sleep and a 24-hour soak were not repeated in this review.
 
-## Released build
+## Previous release — 0.3.2
 
 Verified locally on 2026-10-20:
 
