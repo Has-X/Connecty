@@ -2,6 +2,29 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing
 $asset=Join-Path (Split-Path $PSScriptRoot) 'assets'
 $source=[Drawing.Image]::FromFile((Join-Path (Split-Path $PSScriptRoot) 'controlly-logo.png'))
+function Get-PixelHash([Drawing.Bitmap]$bitmap){
+ $rectangle=[Drawing.Rectangle]::new(0,0,$bitmap.Width,$bitmap.Height)
+ $data=$bitmap.LockBits($rectangle,[Drawing.Imaging.ImageLockMode]::ReadOnly,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+ try{
+  $rowBytes=$bitmap.Width*4
+  $pixels=[byte[]]::new($rowBytes*$bitmap.Height)
+  for($row=0;$row -lt $bitmap.Height;$row++){
+   [Runtime.InteropServices.Marshal]::Copy([IntPtr]::Add($data.Scan0,$row*$data.Stride),$pixels,$row*$rowBytes,$rowBytes)
+  }
+  $hash=[Security.Cryptography.SHA256]::Create()
+  try{return [Convert]::ToBase64String($hash.ComputeHash($pixels))}finally{$hash.Dispose()}
+ }finally{$bitmap.UnlockBits($data)}
+}
+function Save-Logo([Drawing.Bitmap]$bitmap,[string]$path){
+ if(Test-Path -LiteralPath $path){
+  $existing=[Drawing.Bitmap]::new($path)
+  try{
+   # Retain lossless PNG compression when only the source encoding changed.
+   if($existing.Size -eq $bitmap.Size -and (Get-PixelHash $existing) -eq (Get-PixelHash $bitmap)){return}
+  }finally{$existing.Dispose()}
+ }
+ $bitmap.Save($path,[Drawing.Imaging.ImageFormat]::Png)
+}
 function Write-Icon([string]$name,[string]$badge){
  $images=@()
  $isTray=$name -ne 'Connecty'
@@ -16,7 +39,7 @@ function Write-Icon([string]$name,[string]$badge){
    $g.FillEllipse($fill,[single]($size*.58),[single]($size*.58),[single]($size*.42),[single]($size*.42))
    $fill.Dispose()
   }
-  $stream=[IO.MemoryStream]::new();$bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png);$images+=,@($size,$stream.ToArray());if($size -eq 256 -and !$isTray){$bitmap.Save("$asset/Connecty.png",[Drawing.Imaging.ImageFormat]::Png)}
+  $stream=[IO.MemoryStream]::new();$bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png);$images+=,@($size,$stream.ToArray());if($size -eq 256 -and !$isTray){Save-Logo $bitmap "$asset/Connecty.png"}
   $stream.Dispose();$g.Dispose();$bitmap.Dispose()
  }
  $file=[IO.File]::Create("$asset/$name.ico");$writer=[IO.BinaryWriter]::new($file);$writer.Write([uint16]0);$writer.Write([uint16]1);$writer.Write([uint16]$images.Count);$offset=6+16*$images.Count

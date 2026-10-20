@@ -37,4 +37,4 @@ Use short, imperative commit subjects; history also uses `docs:` for documentati
 
 ## Security & Architecture Constraints
 
-Keep SSH embedded in Rust/Tokio/russh; preserve event-driven recovery, bounded logs and authenticated named pipes. Never bypass host-key verification, persist passphrases or commit personal profiles, keys or logs. Preserve profile compatibility and UI-independent operation. Report vulnerabilities through `SECURITY.md`.
+Keep SSH embedded in Rust/Tokio/russh; preserve event-driven recovery, bounded logs and authenticated named pipes. Never bypass host-key verification, persist passphrases or commit personal profiles, keys or logs. Preserve profile compatibility and UI-independent operation. Compress PNGs losslessly; see `assets/README.md`. Report vulnerabilities through `SECURITY.md`.
