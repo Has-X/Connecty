@@ -148,6 +148,15 @@ async def main(args):
         assert await asyncio.wait_for(duplicate.wait(), 8) == 0
         assert (await ctl("snapshot"))["agentPid"] == agent.pid
         passed("duplicate launch attaches safely without replacing the agent")
+        baseline = await ctl("snapshot")
+        await ctl("test_network")
+        await asyncio.sleep(1)
+        await banner()
+        current = await ctl("snapshot")
+        for key in ("reverse", "local"):
+            assert current["connections"][key]["since"] == baseline["connections"][key]["since"]
+            assert current["connections"][key]["retries"] == baseline["connections"][key]["retries"]
+        passed("network interface hints preserve healthy SSH sessions and listeners")
         # Abort real local-forward clients after reading the remote banner. These
         # must close only their own channels, with no SSH transport reconnection.
         prior = await ctl("snapshot")

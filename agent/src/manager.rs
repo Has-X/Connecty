@@ -250,6 +250,7 @@ impl Manager {
                     Recovery::Suspend
                 });
             }
+            "test_network" if self.test_mode => crate::platform::inject_recovery(Recovery::Network),
             _ => return Err(AgentError::config("Unknown agent command")),
         }
         Ok(())

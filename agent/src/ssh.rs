@@ -161,7 +161,18 @@ async fn interruptible<T>(
     tokio::select! {
         biased;
         _ = cancel.cancelled() => Ok(None),
-        _ = recovery.changed() => Err(network("Network or power state changed")),
+        _ = async {
+            loop {
+                if recovery.changed().await.is_err()
+                    || matches!(*recovery.borrow_and_update(), Recovery::Suspend | Recovery::Resume)
+                {
+                    break;
+                }
+                // Interface notifications also describe unrelated adapters.
+                // Preserve an established SSH transport; keepalives detect an
+                // actual outage. Connecting/backoff still react to these hints.
+            }
+        } => Err(network("Power state changed")),
         result = work => result.map(Some),
     }
 }
@@ -616,6 +627,30 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn network_hint_preserves_pending_work_until_power_recovery() {
+        let cancel = CancellationToken::new();
+        let (events, mut recovery) = watch::channel(Recovery::Ready);
+        let (entered, started) = tokio::sync::oneshot::channel();
+        let mut task = tokio::spawn(async move {
+            interruptible::<()>(&cancel, &mut recovery, async {
+                let _ = entered.send(());
+                std::future::pending().await
+            })
+            .await
+        });
+        started.await.unwrap();
+        events.send(Recovery::Network).unwrap();
+        assert!(timeout(Duration::from_millis(50), &mut task).await.is_err());
+        events.send(Recovery::Suspend).unwrap();
+        assert!(
+            timeout(Duration::from_secs(1), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_err()
+        );
+    }
     #[test]
     fn repeated_probe_failures_keep_transport_state_and_recover_without_retries() {
         let mut snapshot = crate::model::Snapshot::default();

@@ -1,5 +1,18 @@
 # Validation record — 0.3.4
 
+## Network-change and installer regressions
+
+Interface-change notifications no longer cancel an established transport or its
+forwarded streams. SSH keepalives still detect real outages; connection attempts,
+backoff and power recovery still react to native events. A focused regression
+test holds pending work across a network hint, then verifies prompt suspension.
+The live suite injects a network hint and checks session identity and retries.
+
+Installer recovery now launches through Task Scheduler instead of leaving a
+persistent child beneath Setup. A local unattended upgrade waited for the full
+process tree to exit, preserved byte-identical profiles and the login preference,
+and restored the normal installed agent under the scheduler.
+
 ## Channel cleanup soak (2026-10-21)
 
 The preceding 0.3.3 source plus the vendored channel cleanup patch was tested
