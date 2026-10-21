@@ -1,6 +1,6 @@
 [package]
 name = "connecty-agent"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 rust-version = "1.89"
 license = "AGPL-3.0-or-later"
@@ -35,3 +35,8 @@ panic = "abort"
 tempfile = "3"
 rand = "0.10"
 tokio = { version = "1.53", features = ["test-util"] }
+
+# Vendored russh 0.64.1 with a client-side channel-reaping fix (leak on
+# client-initiated closes); see vendor/russh/VENDORED-FIX.md.
+[patch.crates-io]
+russh = { path = "vendor/russh" }

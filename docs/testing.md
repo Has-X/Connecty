@@ -77,3 +77,13 @@ dispatch and cleanup, **not physical Windows sleep**.
 
 A short smoke test does not establish a 24/7 soak. Keep long-duration,
 different-network and Modern Standby tests explicit in release validation.
+# Unattended installer checks
+
+On a disposable Windows 11 runner with no existing Connecty installation, run
+`./scripts/test-installer.ps1 -Architecture x64` after building the installer.
+Use `arm64` on native ARM64. This exercises the real silent installer before
+preinstalling the UI runtime, waits for its entire process tree, verifies the
+installed XAML UI and registration, then silently uninstalls. CI limits this
+check to ten minutes and retains the installer log on failure. Do not run this
+clean-install check on a machine with production Connecty profiles or startup.
+

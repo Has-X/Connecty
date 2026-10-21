@@ -20,7 +20,7 @@ while pending:
         if any(k["kind"] != "dev" for k in dep["dep_kinds"]):
             pending.append(dep["pkg"])
 texts, missing = [], []
-for p in sorted((packages[i] for i in seen if packages[i]["source"]), key=lambda p: (p["name"], p["version"])):
+for p in sorted((packages[i] for i in seen if i != metadata["resolve"]["root"]), key=lambda p: (p["name"], p["version"])):
     directory = pathlib.Path(p["manifest_path"]).parent
     files = sorted(f for f in directory.rglob("*") if f.is_file() and
                    f.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE")) and

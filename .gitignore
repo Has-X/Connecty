@@ -9,3 +9,5 @@
 profiles.json
 settings.json
 /installer/runtime.iss
+/agent/vendor/**/.cargo-ok
+__pycache__/

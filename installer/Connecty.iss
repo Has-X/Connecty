@@ -139,7 +139,7 @@ begin
   if not Exec(ExpandConstant('{tmp}\Connecty.exe'), '--runtime-check', '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin
     DownloadPage.Clear;
     DownloadPage.Add('{#RuntimeUrl}', 'WindowsAppRuntimeInstall-x64.exe', '{#RuntimeSha256}');
-    DownloadPage.Show;
+    if not WizardSilent then DownloadPage.Show;
     try
       try
         DownloadPage.Download;
@@ -151,7 +151,8 @@ begin
       DownloadPage.Hide;
     end;
     if not Exec(ExpandConstant('{tmp}\WindowsAppRuntimeInstall-x64.exe'), '--quiet', '', SW_HIDE, ewWaitUntilTerminated, Code) or ((Code <> 0) and (Code <> 3010)) then begin
-      Result := 'The Windows UI runtime could not be installed.';
+      Log(Format('Windows UI runtime installer failed: %d', [Code]));
+      Result := Format('The Windows UI runtime could not be installed (code %d).', [Code]);
       exit;
     end;
     if not Exec(ExpandConstant('{tmp}\Connecty.exe'), '--runtime-check', '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then begin

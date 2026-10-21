@@ -57,6 +57,9 @@ Assert-Rejected { & "$PSScriptRoot/make-winget.ps1" -Version $future }
 # A normal build refreshes only our package version in Cargo.lock.
 $cargo = (Get-Content -LiteralPath "$root/agent/Cargo.toml" -Raw).Replace("version = `"$expected`"", "version = `"$future`"")
 $cargo | Set-Content -LiteralPath $manifest
+if (Test-Path "$root/agent/vendor") {
+    New-Item -ItemType Junction -Path "$fixture/agent/vendor" -Target "$root/agent/vendor" | Out-Null
+}
 Copy-Item -LiteralPath "$root/agent/Cargo.lock" -Destination "$fixture/agent/Cargo.lock"
 New-Item -ItemType Directory -Path "$fixture/agent/src" | Out-Null
 'fn main() {}' | Set-Content -LiteralPath "$fixture/agent/src/main.rs"

@@ -87,14 +87,7 @@ fn close_ui(agent: &Path) -> io::Result<()> {
 }
 fn start(state: &InstallState) -> io::Result<()> {
     if state.running {
-        Command::new(std::env::current_exe()?)
-            .args(["--watchdog", "--profile-dir"])
-            .arg(&state.directory)
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
+        crate::startup::run_registered().map_err(|e| io::Error::other(e.to_string()))?;
     }
     Ok(())
 }
@@ -137,11 +130,7 @@ pub fn run(operation: &str, state_path: Option<&str>) -> Result<(), Box<dyn std:
                 crate::startup::set_at(false, &state.directory, &state.executable)
                     .map_err(|e| io::Error::other(e.to_string()))?;
             }
-            Command::new(&state.executable)
-                .args(["--watchdog", "--profile-dir"])
-                .arg(&state.directory)
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn()?;
+            crate::startup::run_registered().map_err(|e| io::Error::other(e.to_string()))?;
         }
         return Ok(());
     }
@@ -150,8 +139,13 @@ pub fn run(operation: &str, state_path: Option<&str>) -> Result<(), Box<dyn std:
         if !state.directory.is_absolute() {
             return Err("Invalid setup profile directory".into());
         }
-        // Rewrite the locator even for disabled startup, then preserve its setting.
-        crate::startup::set(true, &state.directory).map_err(|e| io::Error::other(e.to_string()))?;
+        // A fresh installation with login startup off needs only the locator;
+        // do not require task registration until the user enables it. Upgrades
+        // rewrite an existing task or restart a previously running agent.
+        if state.startup || state.running || crate::startup::executable().is_some() {
+            crate::startup::set(true, &state.directory)
+                .map_err(|e| io::Error::other(e.to_string()))?;
+        }
         if !state.startup {
             crate::startup::set(false, &state.directory)
                 .map_err(|e| io::Error::other(e.to_string()))?;

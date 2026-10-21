@@ -1,4 +1,28 @@
-# Validation record — 0.3.3
+# Validation record — 0.3.4
+
+## Channel cleanup soak (2026-10-21)
+
+The preceding 0.3.3 source plus the vendored channel cleanup patch was tested
+against a sacrificial SSH server using isolated profiles and listeners:
+
+- Client-initiated close churn previously retained about 2.6–4 KB per stream:
+  private bytes grew from 3.0 to 19.4 MB over 4,276 connections. The patched
+  build stayed near 3.0–3.5 MB over 3,373 connections. Clean and server-initiated
+  closes did not show the leak; reconnect released the retained memory.
+- A 90-minute mixed-fault run completed 97 cycles with no unhealthy final
+  states. The same agent PID survived throughout; private bytes plateaued near
+  4.2 MB and handles remained stable. Network-change recovery did occur, so
+  this does not mean uninterrupted carrier sessions throughout the soak.
+- Target resets, server-side TCP rejection, half-open streams, a real Windows
+  address-change notification and 70 simultaneous clients against the
+  64-stream limit recovered without wedging the agent. The post-patch live
+  suite also passed; physical sleep and Modern Standby were not repeated.
+
+The source patch, original archive checksum and unpublished upstream issue
+draft are retained under `agent/vendor/russh/`. Raw machine-specific evidence
+remains in ignored `build/`. This is a 90-minute soak, not a 24-hour claim.
+
+## Previous release — 0.3.3
 
 ## Release checks (2026-10-20)
 

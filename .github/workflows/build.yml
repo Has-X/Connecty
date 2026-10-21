@@ -23,6 +23,19 @@ jobs:
       - name: Build, test, and package
         shell: pwsh
         run: ./scripts/build.ps1 -Test -Package -Architecture ${{ matrix.arch }}
+      - name: Inno Setup 7
+        shell: pwsh
+        run: ./scripts/prepare-inno.ps1
+      - name: Build installer and WinGet metadata
+        shell: pwsh
+        run: |
+          ./scripts/build-installer.ps1 -Architecture ${{ matrix.arch }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/make-winget.ps1 -Architectures ${{ matrix.arch }}
+      - name: Unattended clean installation
+        timeout-minutes: 10
+        shell: pwsh
+        run: ./scripts/test-installer.ps1 -Architecture ${{ matrix.arch }}
       - name: Native XAML startup
         shell: pwsh
         run: ./scripts/test-ui.ps1 -Architecture ${{ matrix.arch }}
@@ -41,15 +54,6 @@ jobs:
           cargo install cargo-audit --locked
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cargo audit --file agent/Cargo.lock
-      - name: Inno Setup 7
-        shell: pwsh
-        run: ./scripts/prepare-inno.ps1
-      - name: Build installer and WinGet metadata
-        shell: pwsh
-        run: |
-          ./scripts/build-installer.ps1 -Architecture ${{ matrix.arch }}
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./scripts/make-winget.ps1 -Architectures ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: Connecty-${{ matrix.arch }}
@@ -58,3 +62,8 @@ jobs:
             dist/Connecty-Setup-${{ matrix.arch }}.exe
             dist/SHA256SUMS.txt
             packaging/winget/
+      - uses: actions/upload-artifact@v7.0.2
+        if: failure()
+        with:
+          name: installer-logs-${{ matrix.arch }}
+          path: build/installer-clean-*.log

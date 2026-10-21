@@ -184,6 +184,25 @@ pub fn set(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     set_at(enabled, data_dir, &std::env::current_exe()?)
 }
+// Launch through the scheduler so a persistent agent is never a descendant of
+// Setup (package managers may wait for that entire process tree to terminate).
+pub fn run_registered() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let _apartment = Apartment::init()?;
+    unsafe {
+        let task = service()?.GetFolder(&BSTR::from("\\"))?.GetTask(&name()?)?;
+        let enabled = task.Enabled()?.as_bool();
+        if !enabled {
+            task.SetEnabled(VARIANT_BOOL::from(true))?;
+        }
+        let result = task.Run(&VARIANT::default());
+        // Disabling future login launches does not stop this running instance.
+        if !enabled {
+            task.SetEnabled(VARIANT_BOOL::from(false))?;
+        }
+        result?;
+    }
+    Ok(())
+}
 pub fn set_at(
     enabled: bool,
     data_dir: &std::path::Path,

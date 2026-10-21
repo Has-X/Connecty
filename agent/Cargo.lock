@@ -228,7 +228,7 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
 name = "connecty-agent"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "fastrand",
  "rand",
@@ -1143,8 +1143,6 @@ dependencies = [
 [[package]]
 name = "russh"
 version = "0.64.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba61e87b9ec9a39a59a6bbed4c0b8ff7fb07073405b24a767a1f2c8560ac8f58"
 dependencies = [
  "aes",
  "bitflags",
