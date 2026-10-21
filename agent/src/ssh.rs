@@ -572,7 +572,9 @@ pub async fn run(
         if cancel.is_cancelled() {
             break;
         }
-        while *recovery.borrow() == Recovery::Suspend {
+        // A newly cloned receiver can contain old hints from before this
+        // connection existed. Consume that state before opening fresh sockets.
+        while *recovery.borrow_and_update() == Recovery::Suspend {
             publisher.status("suspended", "Waiting for Windows to resume", None);
             tokio::select! {
                 _ = cancel.cancelled() => return,
