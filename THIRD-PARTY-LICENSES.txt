@@ -27441,7 +27441,7 @@ DEALINGS IN THE SOFTWARE.
 
 
 ========================================================================
-tokio 1.54.0
+tokio 1.54.1
 License: MIT
 Source: https://github.com/tokio-rs/tokio
 

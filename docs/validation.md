@@ -2,6 +2,12 @@
 
 ## Outage and tray recovery (2026-10-22)
 
+- The final audit identified newly yanked Tokio 1.54.0. The dependency and lock
+  now require at least 1.54.1, whose upstream fix restores timer-drop
+  synchronization after a possible timer use-after-free. This is an additional
+  dependency correction, not an attribution of the observed C++ UI crash.
+  See https://github.com/tokio-rs/tokio/pull/8692.
+
 - The reported remote-port rejection was reproduced with stale SSH sessions
   retaining both listeners after the carrier changed. Only the identified old
   listener-owning sessions were removed during host recovery. The application
