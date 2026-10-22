@@ -361,26 +361,25 @@ async fn session(
         .await
         .map_err(|_| network("Remote listener request timed out"))?;
         if let Err(error) = requested {
-            if matches!(error, russh::Error::RequestDenied) {
-                // Touching only our reserved listener nudges a stale TCP session to
-                // discover its dead peer. A healthy owner is never terminated.
-                if let Ok(Ok(channel)) = timeout(
-                    Duration::from_secs(2),
-                    handle.channel_open_direct_tcpip(
-                        &p.bind_address,
-                        u32::from(p.remote_port),
-                        "127.0.0.1",
-                        0,
-                    ),
-                )
-                .await
-                {
-                    let _ = channel.close().await;
-                }
-            }
+            // A listener on another SSH session cannot be cancelled by this
+            // connection. Probing it only creates more abandoned forwarded
+            // streams when its owner is unreachable. Close our rejected
+            // session and let server-side dead-client detection reap that owner.
+            let _ = timeout(
+                Duration::from_secs(1),
+                handle.disconnect(
+                    russh::Disconnect::ByApplication,
+                    "Reverse listener rejected",
+                    "en",
+                ),
+            )
+            .await;
             return Err(AgentError::new(
                 "forward_rejected",
-                format!("Remote listening port is unavailable: {error}"),
+                format!(
+                    "Remote listener {}:{} rejected (port in use or forwarding denied): {error}",
+                    p.bind_address, p.remote_port
+                ),
                 true,
             ));
         }

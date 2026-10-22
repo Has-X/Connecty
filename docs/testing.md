@@ -77,6 +77,32 @@ dispatch and cleanup, **not physical Windows sleep**.
 
 A short smoke test does not establish a 24/7 soak. Keep long-duration,
 different-network and Modern Standby tests explicit in release validation.
+
+## Server-side outage recovery
+
+Client keepalives detect a dead carrier but cannot release a listener owned by
+another SSH session on the server. Configure dead-client detection on the SSH
+server for the tunnel account, for example:
+
+```text
+Match User tunnel-account
+    ClientAliveInterval 30
+    ClientAliveCountMax 3
+Match all
+```
+
+Ensure the server actually includes the configuration file; validate with
+`sshd -t` and inspect effective settings with `sshd -T -C user=...,host=...,addr=...`
+before reloading. Existing sessions retain their old settings; reconnect once.
+A silent-drop test with client keepalives disabled released its isolated listener
+after approximately 117 seconds. Allow for server cleanup plus client backoff.
+Never terminate an unknown port owner to force a connection through.
+
+The destination service is independent of Connecty. If the carrier is connected
+but forwarded streams cannot reach the target, check that service separately.
+On Windows, an SSH destination requires the OpenSSH Server (`sshd`) service;
+configure its service recovery policy if it exits unexpectedly.
+
 ## Unattended installer checks
 
 On a disposable Windows 11 runner with no existing Connecty installation, run

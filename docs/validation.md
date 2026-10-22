@@ -1,4 +1,26 @@
-# Validation record — 0.3.4
+# Validation record — 0.3.5
+
+## Outage and tray recovery (2026-10-22)
+
+- The reported remote-port rejection was reproduced with stale SSH sessions
+  retaining both listeners after the carrier changed. Only the identified old
+  listener-owning sessions were removed during host recovery. The application
+  never kills a remote port owner. Server-side dead-client detection was enabled
+  for the tunnel accounts; an isolated silent-drop test with client keepalives
+  disabled released its listener after 116.9 seconds.
+- The destination Windows OpenSSH service had also stopped with error 1067.
+  Restarting it restored authenticated nested logins through both routes. Its
+  separate Windows service recovery policy now restarts it after failure.
+- The UI access violation was reproduced by delivering `WM_CANCELMODE` during
+  cold tray construction. The window was destroyed while `ShowPopup` still used
+  its controls. An opening guard and shutdown guard prevent that reentrancy;
+  the same native lifecycle check passes with the fix. It also exercises dynamic
+  tray rows and ignores a queued reopen after shutdown.
+- Rejected reverse requests now disconnect their new session without probing
+  the occupied listener. The live regression checks that an existing owner stays
+  connected and its listener remains usable.
+
+## Previous release — 0.3.4
 
 ## Network-change and installer regressions
 

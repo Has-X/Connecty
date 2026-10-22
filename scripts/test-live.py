@@ -157,6 +157,19 @@ async def main(args):
             assert current["connections"][key]["since"] == baseline["connections"][key]["since"]
             assert current["connections"][key]["retries"] == baseline["connections"][key]["retries"]
         passed("network interface hints preserve healthy SSH sessions and listeners")
+        owner = await ctl("snapshot")
+        conflict = dict(base, id="conflicting", name="Occupied listener", direction="reverse",
+                        remotePort=args.reverse_port, retry=False)
+        await ctl("configure", profiles=profiles+[conflict])
+        await wait(lambda s: (s["connections"]["conflicting"]["error"] or {}).get("code") == "forward_rejected")
+        current = await healthy()
+        assert current["connections"]["reverse"]["since"] == owner["connections"]["reverse"]["since"]
+        assert current["connections"]["reverse"]["retries"] == owner["connections"]["reverse"]["retries"]
+        assert sum(e["code"] == "stream_open" for e in current["connections"]["reverse"]["logs"]) == sum(
+            e["code"] == "stream_open" for e in owner["connections"]["reverse"]["logs"])
+        await banner()
+        await ctl("configure", profiles=profiles)
+        passed("occupied reverse listener rejected without probing or replacing its healthy owner")
         # Abort real local-forward clients after reading the remote banner. These
         # must close only their own channels, with no SSH transport reconnection.
         prior = await ctl("snapshot")

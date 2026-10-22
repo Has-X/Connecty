@@ -154,7 +154,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     inline static App *popupHookOwner = nullptr;
     Microsoft::UI::Dispatching::DispatcherQueueTimer clipboardTimer{nullptr};
     bool quitting = false, rebuilding = false, mainVisible = false, popupOnly = false, railOpen = true,
-         mainReady = false, dialogBusy = false;
+         mainReady = false, dialogBusy = false, openingPopup = false;
     int selected = -1;
     std::vector<Profile> profiles;
     std::vector<TextBlock> rowStates;
@@ -215,9 +215,23 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             main.FindName(L"SourceServer").as<FontIcon>();
             quick.FindName(L"PopupPause").as<Button>();
             editor.FindName(L"ValidationMessage").as<InfoBar>();
+            // Exercise the dynamic tray rows as well as the static XAML.
+            popupRoot = quick;
+            Profile fixture;
+            fixture.id = L"ui-check";
+            fixture.name = L"Connection";
+            profiles.push_back(fixture);
+            PopupRows();
+            popupRoot = nullptr;
+            window = Window();
+            check_hresult(window.as<IWindowNative>()->get_WindowHandle(&hwnd));
+            popupOnly = true;
+            ShowPopup(true);
+            HidePopup();
+            ShowPopup(); // Queued tray clicks after shutdown must be harmless.
             uiCheckResult = 0;
             std::ofstream out(Folder() / L"ui-check.log", std::ios::trunc);
-            out << "Native XAML startup validation passed\n";
+            out << "Native XAML, tray rows and popup lifecycle validation passed\n";
             Exit();
             return;
         }
@@ -908,8 +922,15 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             .IsEnabled(std::any_of(profiles.begin(), profiles.end(),
                                    [&](auto const &p) { return Active(Connection(p.id).state); }));
     }
-    void ShowPopup()
+    void ShowPopup(bool checkOpening = false)
     {
+        if (quitting || openingPopup) return;
+        auto lifetime = get_strong();
+        openingPopup = true;
+        struct OpeningScope {
+            bool &flag;
+            ~OpeningScope() { flag = false; }
+        } opening{openingPopup};
         if (!popup)
         {
             popup = Window();
@@ -919,6 +940,7 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
             popup.Content(popupRoot);
             check_hresult(popup.as<IWindowNative>()->get_WindowHandle(&popupHwnd));
             SetWindowSubclass(popupHwnd, PopupSubclass, 2, reinterpret_cast<DWORD_PTR>(this));
+            if (checkOpening) SendMessageW(popupHwnd, WM_CANCELMODE, 0, 0);
             auto presenter =
                 popup.AppWindow().Presenter().as<Microsoft::UI::Windowing::OverlappedPresenter>();
             presenter.SetBorderAndTitleBar(false, false);
@@ -1000,6 +1022,10 @@ struct App : ApplicationT<App, Markup::IXamlMetadataProvider>
     }
     void HidePopup()
     {
+        // Native frame changes can synchronously send WM_CANCELMODE while the
+        // tray window is still being constructed. Closing here destroys its
+        // XAML namescope underneath ShowPopup and causes a null-control AV.
+        if (quitting || openingPopup) return;
         DisarmPopup();
         if (popup) popup.AppWindow().Hide();
         if (popupOnly && !mainVisible) Quit();
