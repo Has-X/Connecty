@@ -1,0 +1,26 @@
+name: ARM64 runtime installation diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [direct, inno]
+    runs-on: windows-11-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Exercise missing-runtime installation
+        shell: pwsh
+        run: ./scripts/diagnose-arm64-runtime.ps1 -Mode ${{ matrix.mode }} -DisposableRunner
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: arm64-runtime-${{ matrix.mode }}
+          path: |
+            build/arm64-runtime-diagnostic/*.txt
+            build/arm64-runtime-diagnostic/*.json
+            build/arm64-runtime-diagnostic/*.log
