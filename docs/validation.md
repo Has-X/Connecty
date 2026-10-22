@@ -13,7 +13,8 @@
   listener-owning sessions were removed during host recovery. The application
   never kills a remote port owner. Server-side dead-client detection was enabled
   for the tunnel accounts; an isolated silent-drop test with client keepalives
-  disabled released its listener after 116.9 seconds.
+  disabled released its listener after 116.9 seconds. The same test on the
+  second server released its listener after 116.6 seconds.
 - The destination Windows OpenSSH service had also stopped with error 1067.
   Restarting it restored authenticated nested logins through both routes. Its
   separate Windows service recovery policy now restarts it after failure.
@@ -25,6 +26,10 @@
 - Rejected reverse requests now disconnect their new session without probing
   the occupied listener. The live regression checks that an existing owner stays
   connected and its listener remains usable.
+- All fourteen live checks passed on the final Tokio 1.54.1 build, alongside
+  twenty-two Rust tests, the C++ core checks, popup lifecycle checks, Clippy and
+  a clean dependency audit. The normal x64 upgrade preserved profiles/startup,
+  and both authenticated reverse routes returned the PC hostname.
 
 ## Previous release — 0.3.4
 
