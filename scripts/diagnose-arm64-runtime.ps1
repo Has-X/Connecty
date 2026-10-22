@@ -55,6 +55,26 @@ try {
     $dependents | Select-Object Name, PackageFullName, NonRemovable |
         ConvertTo-Json | Set-Content "$output/removed-dependents.json"
     foreach ($package in $dependents) { Remove-AppxPackage -Package $package.PackageFullName }
+    # Shell components may still map a removed app's framework. Stop only this
+    # disposable user's processes which actually loaded the target framework.
+    $locations = @($frameworks.InstallLocation)
+    $loaders = @(Get-Process -IncludeUserName | Where-Object UserName -eq ([Security.Principal.WindowsIdentity]::GetCurrent().Name) |
+        Where-Object {
+            $mapped = $false
+            try {
+                foreach ($module in $_.Modules) {
+                    foreach ($location in $locations) {
+                        if ($module.FileName.StartsWith($location + '\', [StringComparison]::OrdinalIgnoreCase)) { $mapped = $true }
+                    }
+                }
+            } catch { Write-Host "Module inspection unavailable for PID $($_.Id)" }
+            $mapped
+        })
+    $loaders | Select-Object Id, ProcessName | ConvertTo-Json | Set-Content "$output/framework-loaders.json"
+    foreach ($loader in $loaders) {
+        if ($loader.Id -eq $PID -or $loader.ProcessName -like '*Runner*') { throw 'Diagnostic host itself uses the runtime' }
+        Stop-Process -Id $loader.Id -Force -ErrorAction SilentlyContinue
+    }
     foreach ($package in $frameworks) {
         if (Get-AppxPackage | Where-Object PackageFullName -eq $package.PackageFullName) {
             Remove-AppxPackage -Package $package.PackageFullName
