@@ -43,9 +43,23 @@ try {
     Get-AppxPackage | Where-Object Name -match 'WindowsAppRuntime' |
         Select-Object Name, Version, Architecture, PackageFullName |
         ConvertTo-Json | Set-Content "$output/packages-before.json"
-    # Only this disposable runner's current-user 2.x registration is removed.
-    Get-AppxPackage | Where-Object Name -like 'Microsoft.WindowsAppRuntime.2*' |
-        ForEach-Object { Remove-AppxPackage -Package $_.PackageFullName }
+    # Remove dependents first, only in this disposable runner's current user.
+    # The normal CI image already carries 2.x for built-in apps.
+    $frameworks = @(Get-AppxPackage | Where-Object {
+        $_.Name -like 'Microsoft.WindowsAppRuntime.2*' -and $_.Architecture -eq 'Arm64'
+    })
+    $frameworkNames = @($frameworks.PackageFullName)
+    $dependents = @(Get-AppxPackage | Where-Object {
+        @($_.Dependencies | Where-Object PackageFullName -in $frameworkNames).Count -gt 0
+    })
+    $dependents | Select-Object Name, PackageFullName, NonRemovable |
+        ConvertTo-Json | Set-Content "$output/removed-dependents.json"
+    foreach ($package in $dependents) { Remove-AppxPackage -Package $package.PackageFullName }
+    foreach ($package in $frameworks) {
+        if (Get-AppxPackage | Where-Object PackageFullName -eq $package.PackageFullName) {
+            Remove-AppxPackage -Package $package.PackageFullName
+        }
+    }
     $check = Run-Bounded $app '--runtime-check' 'missing-runtime-check' 30
     if ($check -eq 0) { throw 'Runtime is still available; missing-runtime path was not exercised' }
     if ($Mode -eq 'direct') {
