@@ -158,7 +158,7 @@ async def main(args):
             assert current["connections"][key]["retries"] == baseline["connections"][key]["retries"]
         passed("network interface hints preserve healthy SSH sessions and listeners")
         owner = await ctl("snapshot")
-        conflict = dict(base, id="conflicting", name="Occupied listener", direction="reverse",
+        conflict = dict(base, id="conflicting", host="same-server-alias", name="Occupied listener", direction="reverse",
                         remotePort=args.reverse_port, retry=False)
         await ctl("configure", profiles=profiles+[conflict])
         await wait(lambda s: (s["connections"]["conflicting"]["error"] or {}).get("code") == "forward_rejected")
