@@ -43,6 +43,16 @@ Start-Transcript -Path "$output/transcript.txt"
 Write-Host "Diagnostic identity: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Diagnostic must run without elevation' }
+# CreateProcessWithLogon inherits the parent's environment. Resolve profile paths
+# from this token's loaded profile instead of using runneradmin's temporary dir.
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$env:USERPROFILE = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid").ProfileImagePath
+$env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData/Local'
+$env:APPDATA = Join-Path $env:USERPROFILE 'AppData/Roaming'
+$env:TEMP = Join-Path $env:LOCALAPPDATA 'Temp'
+$env:TMP = $env:TEMP
+New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
+Write-Host "Standard-user profile: $env:USERPROFILE; temp: $env:TEMP"
 function Run-Bounded([string]$File, [string]$Arguments, [string]$Label, [int]$Seconds = 180) {
     $process = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput "$output/$Label.stdout.txt" -RedirectStandardError "$output/$Label.stderr.txt"
