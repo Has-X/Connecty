@@ -31,6 +31,25 @@
   a clean dependency audit. The normal x64 upgrade preserved profiles/startup,
   and both authenticated reverse routes returned the PC hostname.
 
+## ARM64 missing-runtime installation (2026-10-22)
+
+The previous WinGet validation passed x64 but timed out on ARM64 immediately
+after the runtime download was verified. The existing native CI image already
+contains that runtime, so its clean app installation did not cover this path.
+
+[Diagnostic run 39704367862](https://github.com/Has-X/Connecty/actions/runs/39704367862)
+used two disposable native ARM64 runners, each with a new, non-administrator
+account and correctly initialized profile/temp paths. Both accounts failed the
+runtime bootstrap check before installation. One installed Microsoft's pinned
+ARM64 runtime directly; the other ran the public 0.3.5 Connecty installer with
+WinGet's silent switches. Both installers exited successfully, and bootstrap
+checks then passed. Release and prerequisite checksums were verified first.
+
+This did not reproduce the WinGet timeout or establish its original cause.
+The diagnostic used Windows build 26200; the earlier validator used 26100.
+Both architectures remain in the WinGet submission, which still requires
+Microsoft's installation validation. Logs are attached to the diagnostic run.
+
 ## Previous release — 0.3.4
 
 ## Network-change and installer regressions
